@@ -37,6 +37,14 @@
   .unit .swatch{width:100%;height:34px;border-radius:6px;margin-bottom:6px;position:relative;overflow:hidden;}
   .unit .name{font-size:.72rem;font-weight:700;}
   .unit .aff{font-size:.58rem;color:var(--dim);margin-bottom:4px;}
+  .kitrow{display:flex;gap:3px;margin:4px 0;}
+  .chip{font-size:.52rem;font-weight:700;padding:2px 0;flex:1;text-align:center;border-radius:4px;
+    background:#0d0f14;border:1px solid var(--line);color:var(--dim);cursor:default;}
+  .chip:hover{border-color:#fff;color:var(--text);}
+  .chip.chip-ult{color:var(--warn);border-color:#4a3620;}
+  .chip.chip-ult:hover{border-color:var(--warn);}
+  .chip.chip-pas{color:#b794f4;border-color:#3a2f52;}
+  .chip.chip-pas:hover{border-color:#b794f4;}
   .bar{height:8px;border-radius:4px;background:#0d0f14;overflow:hidden;margin-bottom:3px;border:1px solid #000;}
   .bar > i{display:block;height:100%;transition:width .18s linear;}
   .hp > i{background:linear-gradient(90deg,#68d391,#38b06a);}
@@ -115,10 +123,20 @@
 
   #tuning{position:fixed;top:16px;left:16px;font-size:.6rem;color:var(--dim);opacity:.55;max-width:200px;z-index:15;}
   #tuning:hover{opacity:1;}
+
+  #tooltip{position:fixed;z-index:50;max-width:230px;background:#0d0f14;border:1px solid var(--line);
+    border-radius:8px;padding:9px 11px;font-size:.68rem;line-height:1.45;color:var(--text);
+    box-shadow:0 6px 20px rgba(0,0,0,.5);pointer-events:none;opacity:0;transition:opacity .1s;}
+  #tooltip.show{opacity:1;}
+  #tooltip .tt-title{font-weight:700;font-size:.75rem;margin-bottom:1px;}
+  #tooltip .tt-tag{font-size:.58rem;color:var(--dim);text-transform:uppercase;letter-spacing:.04em;margin-bottom:5px;display:flex;justify-content:space-between;gap:8px;}
+  #tooltip .tt-cd{color:var(--warn);}
+  #tooltip .tt-body{color:#d6d9e0;}
 </style>
 </head>
 <body>
 <div id="vignette"></div>
+<div id="tooltip"></div>
 <div id="log"></div>
 <div id="tuning">Step 1-4 combat slice · placeholder art · tune constants at top of &lt;script&gt;</div>
 
@@ -224,13 +242,61 @@ function buildUnitDOM(){
       <div class="hpnum"><span data-role="hpnum">${u.hp}/${u.maxHP}</span></div>
       <div class="bar hp"><i data-role="hpbar" style="width:100%"></i></div>
       <div class="bar mom"><i data-role="mombar" style="width:0%"></i></div>
+      <div class="kitrow" data-role="kitrow"></div>
       <div class="badges" data-role="badges"></div>
     `;
     box.addEventListener('click', ()=> onUnitClick(u));
     u.el = box;
+    buildKitChips(u, box.querySelector('[data-role=kitrow]'));
     (u.team==='player'?pRow:eRow).appendChild(box);
   }
   buildTrackSlots();
+}
+
+/* ---------------- TOOLTIPS ---------------- */
+const tooltipEl = document.getElementById('tooltip');
+function showTooltip(anchorEl, tip){
+  tooltipEl.innerHTML = `
+    <div class="tt-title">${tip.title}</div>
+    <div class="tt-tag"><span>${tip.tag}</span>${tip.cd?`<span class="tt-cd">${tip.cd}</span>`:''}</div>
+    <div class="tt-body">${tip.body}</div>
+  `;
+  const r = anchorEl.getBoundingClientRect();
+  tooltipEl.classList.add('show');
+  const ttRect = tooltipEl.getBoundingClientRect();
+  let left = r.left + r.width/2 - ttRect.width/2;
+  left = Math.max(8, Math.min(left, window.innerWidth-ttRect.width-8));
+  let top = r.top - ttRect.height - 10;
+  if(top<8) top = r.bottom + 10;
+  tooltipEl.style.left = left+'px';
+  tooltipEl.style.top = top+'px';
+}
+function hideTooltip(){ tooltipEl.classList.remove('show'); }
+function bindTooltip(el, tipFn){
+  el.addEventListener('mouseenter', ()=> showTooltip(el, tipFn()));
+  el.addEventListener('mouseleave', hideTooltip);
+}
+
+function buildKitChips(u, row){
+  const kit = u.team==='player' ? SKILLS[u.id] : ENEMY_KIT[u.id];
+  const pas = PASSIVES[u.id];
+  const entries = u.team==='player'
+    ? [['s1','S1'],['active','ACT'],['ult','ULT']]
+    : [['s1','ATK'],['active','SPEC']];
+  for(const [key,label] of entries){
+    const chip = document.createElement('div');
+    chip.className = 'chip'+(key==='ult'?' chip-ult':'');
+    chip.textContent = label;
+    bindTooltip(chip, ()=> kit[key].tip(u));
+    row.appendChild(chip);
+  }
+  if(pas){
+    const chip = document.createElement('div');
+    chip.className = 'chip chip-pas';
+    chip.textContent = 'PAS';
+    bindTooltip(chip, ()=> pas.tip(u));
+    row.appendChild(chip);
+  }
 }
 
 let trackSlots=[];
@@ -513,6 +579,12 @@ function highestMomentum(team){
   return units.filter(u=>u.alive && u.team===team).sort((a,b)=>b.momentum-a.momentum)[0];
 }
 
+/* ---------------- TOOLTIP TEXT HELPERS ---------------- */
+function cdLine(current, max){
+  return current>0 ? `${current} of ${max} turns left` : `Ready (cooldown ${max} turns)`;
+}
+function pct(n){ return Math.round(n*100); }
+
 /* ---------------- SKILL DEFINITIONS (players) ---------------- */
 const SKILLS = {
   dil:{
@@ -520,12 +592,14 @@ const SKILLS = {
       await dealDamage(a,t,1.0);
       a.momentum = Math.min(100, a.momentum+6);
       logMsg(`${a.name} uses Steady Strike on ${t.name}.`,'');
-    }},
+    }, tip:(a)=>({title:'Steady Strike', tag:'Active · Basic', cd:'No cooldown',
+      body:`ATK ×1.0 to one enemy. On hit, pulls Diligence's own Momentum +6 — a small self-tempo bonus.`})},
     active:{name:'Quicken', target:'ally', cdMax:3, exec: async(a,t)=>{
       t.momentum = Math.min(100, t.momentum+TUNING.PULL_AMOUNT);
       pulseTrack();
       logMsg(`${a.name} pulls ${t.name}'s Momentum (+${TUNING.PULL_AMOUNT}).`,'');
-    }},
+    }, tip:(a)=>({title:'Quicken', tag:'Active · Momentum', cd:cdLine(a.cd.active,3),
+      body:`Pulls target ally's Momentum +${TUNING.PULL_AMOUNT}, advancing their turn. No damage. The team's signature enabler.`})},
     ult:{name:'Industry', target:'none', cdMax:4, exec: async(a)=>{
       sfx.ult();
       for(const ally of units.filter(u=>u.alive && u.team===a.team)){
@@ -534,19 +608,22 @@ const SKILLS = {
       }
       pulseTrack();
       logMsg(`${a.name} unleashes Industry — team tempo surges!`,'ult');
-    }},
+    }, tip:(a)=>({title:'Industry', tag:'Ultimate', cd:cdLine(a.cd.ult,4),
+      body:`Team-wide: +20 Momentum to every ally and +15% Potency for 2 turns. No damage. Sets up the finisher.`})},
   },
   pat:{
     s1:{name:'Forbearance', target:'enemy', cd:0, exec: async(a,t)=>{
       await dealDamage(a,t,0.8);
       logMsg(`${a.name} uses Forbearance on ${t.name}.`,'');
-    }},
+    }, tip:(a)=>({title:'Forbearance', tag:'Active · Basic', cd:'No cooldown',
+      body:`ATK ×0.8 to one enemy. Weak early — the point is what it sets up.`})},
     active:{name:'Long Game', target:'enemy', cdMax:4, exec: async(a,t)=>{
       const mult = 1.0+0.4*a.stacks;
       logMsg(`${a.name} unleashes Long Game (${a.stacks} stacks)!`,'');
       a.stacks=0;
       await dealDamage(a,t,mult);
-    }},
+    }, tip:(a)=>({title:'Long Game', tag:'Active', cd:cdLine(a.cd.active,4),
+      body:`Consumes all Forbearance stacks: ATK ×(1.0 + 0.4×stacks) to one enemy, then resets stacks to 0. Right now: ${a.stacks} stacks → ×${(1.0+0.4*a.stacks).toFixed(2)}. The payoff button — bigger the longer you wait.`})},
     ult:{name:'The Meek Inherit', target:'none', cdMax:5, exec: async(a)=>{
       sfx.ult();
       const mult = 2.0+0.3*a.stacks;
@@ -554,7 +631,8 @@ const SKILLS = {
       for(const e of units.filter(u=>u.alive && u.team!==a.team)){
         await dealDamage(a,e,mult,{isUlt:true});
       }
-    }},
+    }, tip:(a)=>({title:'The Meek Inherit', tag:'Ultimate · AoE', cd:cdLine(a.cd.ult,5),
+      body:`ATK ×(2.0 + 0.3×stacks) to all enemies. Scales with banked stacks but does not consume them. Right now: ${a.stacks} stacks → ×${(2.0+0.3*a.stacks).toFixed(2)}.`})},
   },
   cha:{
     s1:{name:'Offering', target:'enemy', cd:0, exec: async(a,t)=>{
@@ -562,12 +640,14 @@ const SKILLS = {
       const ally = lowestHPAlly(a.team);
       heal(ally, final*0.5);
       logMsg(`${a.name} offers pain as grace — heals ${ally.name}.`,'heal');
-    }},
+    }, tip:(a)=>({title:'Offering', tag:'Active · Basic', cd:'No cooldown',
+      body:`ATK ×0.7 to one enemy, then heals the lowest-HP ally for 50% of the damage dealt.`})},
     active:{name:'Bear the Burden', target:'none', cdMax:4, exec: async(a)=>{
       addBuff(a, {type:'redirect', label:'Redirect', pct:0.5, duration:2});
       logMsg(`${a.name} bears the team's burden.`,'');
       render();
-    }},
+    }, tip:(a)=>({title:'Bear the Burden', tag:'Active · Self', cd:cdLine(a.cd.active,4),
+      body:`For 2 turns, redirects 50% of all damage aimed at allies onto Charity instead. No damage dealt.`})},
     ult:{name:'Selfless Vigil', target:'none', cdMax:4, exec: async(a)=>{
       sfx.ult();
       const shieldAmt = a.maxHP*0.3;
@@ -577,13 +657,15 @@ const SKILLS = {
       }
       logMsg(`${a.name} pours out Selfless Vigil — the team is shielded.`,'ult');
       render();
-    }},
+    }, tip:(a)=>({title:'Selfless Vigil', tag:'Ultimate · Team', cd:cdLine(a.cd.ult,4),
+      body:`Transfers Charity's own active buffs to the whole team and grants every ally a shield worth 30% of Charity's max HP (${Math.round(a.maxHP*0.3)}).`})},
   },
   jus:{
     s1:{name:'Verdict', target:'enemy', cd:0, exec: async(a,t)=>{
       await dealDamage(a,t,1.1);
       logMsg(`${a.name} passes Verdict on ${t.name}.`,'');
-    }},
+    }, tip:(a)=>({title:'Verdict', tag:'Active · Basic', cd:'No cooldown',
+      body:`ATK ×1.1 to one enemy.`})},
     active:{name:'Weigh the Scales', target:'enemy', cdMax:3, exec: async(a,t)=>{
       const landed = applyDebuffChance(1.0, a, t);
       if(landed){
@@ -594,21 +676,47 @@ const SKILLS = {
         logMsg(`${t.name} resists Weigh the Scales.`,'debuff');
       }
       render();
-    }},
+    }, tip:(a)=>({title:'Weigh the Scales', tag:'Active · Debuff', cd:cdLine(a.cd.active,3),
+      body:`Applies Def Break (−40% DEF, 2 turns) to the target. Not guaranteed — contested by Potency vs. Resolve: chance = 100% × (1 + your Potency − target's Resolve), clamped 5–100%. Your current Potency: ${pct(a.POT)}%.`})},
     ult:{name:'Final Judgment', target:'enemy', cdMax:4, exec: async(a,t)=>{
       sfx.ult();
       const ignoreDef = t.debuffs.length>0;
       logMsg(`${a.name} passes Final Judgment on ${t.name}${ignoreDef?' — defenses mean nothing!':''}`,'ult');
       await dealDamage(a,t,4.0,{ignoreDef, isUlt:true});
-    }},
+    }, tip:(a)=>({title:'Final Judgment', tag:'Ultimate', cd:cdLine(a.cd.ult,4),
+      body:`ATK ×4.0 to one enemy. Ignores DEF entirely if the target is currently suffering any debuff. The team's win condition.`})},
   },
+};
+
+/* ---------------- PASSIVES (informational, no button) ---------------- */
+const PASSIVES = {
+  dil:{ tip:(a)=>({title:'Persistence', tag:'Passive', cd:null,
+    body:`Each of Diligence's own turns: +5% ATK, stacking, no decay in-fight. Right now: ${a.stacks} stacks → +${5*a.stacks}% ATK. Small per turn, large by turn 8+.`})},
+  pat:{ tip:(a)=>({title:'Endure', tag:'Passive', cd:null,
+    body:`At the start of each of Patience's own turns, gains a Forbearance stack: +6% ATK, +4% DEF per stack, uncapped. Right now: ${a.stacks} stacks → +${6*a.stacks}% ATK, +${4*a.stacks}% DEF.`})},
+  cha:{ tip:(a)=>({title:'Grace', tag:'Passive', cd:null,
+    body:`Whenever Charity herself is healed, 10% of that healing overflows to the lowest-HP ally.`})},
+  jus:{ tip:(a)=>({title:'The Guilty Fall', tag:'Passive', cd:null,
+    body:`Justice deals +50% damage to any enemy currently suffering a debuff (Def Break, Weakened, etc.). This is the whole identity — turn setups into kills.`})},
 };
 
 /* ---------------- ENEMY AI ---------------- */
 const ENEMY_KIT = {
-  mar:{ specialName:'Sunder Tempo', specialCdMax:2 },
-  wra:{ specialName:'Weaken', specialCdMax:3 },
-  col:{ specialName:'Smite', specialCdMax:4 },
+  mar:{ specialName:'Sunder Tempo', specialCdMax:2,
+    s1:{tip:(a)=>({title:'Basic Attack', tag:'Active · Basic', cd:'No cooldown', body:`ATK ×0.9 to the lowest-HP player unit.`})},
+    active:{tip:(a)=>({title:'Sunder Tempo', tag:'Special · Momentum', cd:cdLine(a.cd.active,2),
+      body:`Pushes the player unit closest to acting back ${TUNING.PUSH_AMOUNT} Momentum, delaying their turn. Marauder's whole role is disrupting your tempo — top AI priority whenever it's ready.`})},
+  },
+  wra:{ specialName:'Weaken', specialCdMax:3,
+    s1:{tip:(a)=>({title:'Basic Attack', tag:'Active · Basic', cd:'No cooldown', body:`ATK ×0.9 to the lowest-HP player unit.`})},
+    active:{tip:(a)=>({title:'Weaken', tag:'Special · Debuff', cd:cdLine(a.cd.active,3),
+      body:`Applies ATK Down (−30%, 2 turns) to the player with the lowest effective DEF. Contested by Potency vs. Resolve, same formula as Justice's Weigh the Scales.`})},
+  },
+  col:{ specialName:'Smite', specialCdMax:4,
+    s1:{tip:(a)=>({title:'Basic Attack', tag:'Active · Basic', cd:'No cooldown', body:`ATK ×0.9 to the lowest-HP player unit.`})},
+    active:{tip:(a)=>({title:'Smite', tag:'Special', cd:cdLine(a.cd.active,4),
+      body:`A heavy ATK ×1.6 hit on the lowest-HP player unit. Colossus's tanky stat line means it can afford to wind this up.`})},
+  },
 };
 
 async function enemyAct(actor){
@@ -732,7 +840,9 @@ async function playerTurn(actor){
     const cdVal = key==='ult'?actor.cd.ult:(key==='active'?actor.cd.active:0);
     b.disabled = cdVal>0;
     b.innerHTML = def.name + (cdVal>0?`<span class="cd">${cdVal}</span>`:'');
+    if(def.tip) bindTooltip(b, ()=> def.tip(actor));
     b.onclick = async ()=>{
+      hideTooltip();
       sfx.ui();
       Array.from(btnRow.children).forEach(x=>x.disabled=true);
       let target=null;
