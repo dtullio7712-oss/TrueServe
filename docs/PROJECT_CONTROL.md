@@ -54,6 +54,8 @@ A **single-player, top-down 2D** game fusing:
 | 1 | `Game_Design_Doc.md` | ✅ v0.1 | Master design doc (why + systems overview) |
 | 2 | `combat_slice_spec.md` | ✅ v0.1 drafted → 🔲 **needs playtest** | Implementable spec for a playable single fight — the first thing to build & playtest |
 | 3 | `combat_prototype_handoff.md` | ✅ ready | Build brief for the throwaway browser prototype — hand to Claude Code / Fable to build the slice in ordered, playable steps |
+| 4 | `progression_slice_spec.md` | ✅ v0.1 (revised after reconciliation) | Progression & rewards layer spec — persistence, allocation, gear, attrition run, crafting MVP |
+| 5 | `progression_prototype_handoff.md` | ✅ ready → 🔨 **build in progress (Step 1 done)** | Build brief for extending the combat prototype with progression, in ordered playable steps |
 | … | (economy, bridge, town, roster) | ⬜ later | One spec at a time, in build order, each after the prior slice playtests |
 
 **Archive note:** Jan 2026 "Angels" design bible (folder: *Archangels' Oath / For His Glory*) reviewed this session. It was a *different game* — F2P-monetized, PC 3D Unity, named biblical figures as the roster — and is **superseded**, NOT the current direction. Two mechanics were salvaged from it into the combat slice (see LOCKED list). Everything else in that folder (monetization economy, named-saint roster, 10%-resource-loss-on-death) is **explicitly not carried forward.**
@@ -87,19 +89,21 @@ A **single-player, top-down 2D** game fusing:
 ---
 
 ## CURRENT STATE
-`Game_Design_Doc.md` at **v0.2** (combat table cleaned up: CR→Momentum, ult cooldowns, Potency-vs-Resolve, dual-attack gearing, Glory shelved). **`combat_slice_spec.md` v0.1** drafted — full Momentum turn system, per-unit cooldown-gated ults, 4 complete virtue-kits (Diligence / Patience / Charity / Justice), damage + Potency-vs-Resolve contest math, affinity wheel, and a feel-first juice spec. Affinity wheel salvaged from the reviewed-and-superseded Jan "Angels" bible; team-Glory meter drafted then **shelved** in favor of cooldowns. **Spec is written but NOT yet built or playtested** — that's the whole point of the next phase.
+`Game_Design_Doc.md` at **v0.2**. `combat_slice_spec.md` v0.1 — built and **first-playtested positive** (see prior session). `progression_slice_spec.md` v0.1 drafted, then **revised this session** after a reconciliation pass against the built combat prototype:
+- **Per-unit stats, not a shared anchor** — the prototype's 4 hand-authored statlines (Justice glass cannon, Charity tank, etc.) are the canonical `baseStats`; the old flat 100/20/12 anchor is retired to a fallback-only role for un-tuned units/enemies.
+- **K = 1000, not 300** — the DEF-mitigation divisor keeps the prototype's playtested value; the spec's original K=300 was a placeholder written without the prototype in hand.
+- **Growth model changed to percentage-of-own-base** (not flat +N/point) so allocation is meaningful on both a 950-HP and a 1300-HP unit.
+- **Owner-set growth budget locked:** level cap 100, milestone levels every 10, hard power ceiling ~2.5× (levels ~1.5× · gear ~1.7×) — the anti-overtuning spine for everything downstream.
+
+**Progression build in progress** (`progression_prototype_handoff.md`, extending `prototype/combat_prototype.html` in place — same throwaway single-file build, no new project):
+- ✅ **Step 1 — Persistence layer.** Each player unit now has a persistent record (level, xp, unspentPoints, allocatedPoints stub, gear[6] stub, baseStats, currentHP) saved to `localStorage`. Verified via headless-browser playthrough: HP and XP/level carry from battle 1 into battle 2, a level-up fires and grants a point pool, and state survives a full page reload (cross-session persistence). No stat/allocation math or management hub yet — that's Step 2.
+- ⬜ Steps 2–8 remain (allocation math + hub, equipment, run/escrow structure, enemy scaling, crafting, profile viewer, playtest pass).
 
 ## NEXT SESSION STARTS HERE
-**Deliverable:** build the throwaway combat prototype and **playtest it** — per the ONE discipline, no new specs until this slice proves fun.
+**Deliverable:** Step 2 of `progression_prototype_handoff.md` — the stat + allocation math and a management-hub stub.
 
-**How:** hand `combat_prototype_handoff.md` to Claude Code / Fable (or a fresh build session). It builds the slice as a single self-contained browser HTML file, placeholder rectangles only, in four ordered playable steps:
-1. **Momentum turn loop** (dry, no juice) → see turn order flow.
-2. **Game-feel pass** (hit-pause, shake, flash, number-pop, sound) on that dry loop → *first real playtest; the make-or-break checkpoint.*
-3. **Full 4 kits + Momentum push/pull** → feel the tactic land.
-4. **Debuffs, affinities, win/loss** → the complete setup→execute fight.
+**Before building further:** derive the exact `POINT_PCT[stat]` per-point rates and points/level table so that a single-stat-focused build over 99 level-ups lands near +150% of base (the 1.5× ceiling), and confirm by simulation against a real prototype statline (not the fallback anchor) that a maxed single-stat build plus full gear lands near the 2.5× combined ceiling. **Show the derived numbers for a sanity check before wiring the rest of allocation.**
 
-**The process lesson this is teaching:** a game slice is *done when it feels right*, not when it's spec-complete — the opposite of the servicing-engine loop. Build the smallest playable thing, play it, react, tune the constants by feel. The spec's numbers are starting guesses, not final.
+Then: implement the 6-stat model, rarity multipliers, SPD soft cap, the XP curve to level 100, milestone levels every 10 (bigger point pool + non-stat unlock), and a minimal management-hub screen to spend the `unspentPoints` already being tracked from Step 1 — with live before/after stat deltas. Playable checkpoint: win a fight → gain XP/level → open hub → spend points → see the unit's stats change → those changes carry into the next fight.
 
-**After it plays well:** decide whether to refine combat depth or move to the next system spec (leading candidate: the capture→roster→battle *bridge*, proving one unit crosses from overworld into a fight).
-
-Reminder: resist speccing downstream systems until the slice is *fun in your hands*.
+**The process lesson still holds:** playtest each step before the next. Don't build Steps 3+ until Step 2's allocation moment is confirmed to feel good, not just to compute correctly.

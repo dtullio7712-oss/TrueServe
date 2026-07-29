@@ -121,6 +121,15 @@
   .glow-win{text-shadow:0 0 24px #f6ad55,0 0 60px rgba(246,173,85,.6);animation:glowPulse 1.6s ease-in-out infinite alternate;}
   @keyframes glowPulse{from{text-shadow:0 0 12px #f6ad55;}to{text-shadow:0 0 36px #f6ad55,0 0 70px rgba(246,173,85,.7);}}
 
+  #ovRoster{width:100%;max-width:420px;margin:0 0 16px;font-size:.7rem;text-align:left;
+    background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:10px 14px;}
+  #ovRoster .ov-unit{display:flex;justify-content:space-between;gap:10px;padding:3px 0;color:var(--text);}
+  #ovRoster .ov-unit .dim{color:var(--dim);}
+  #ovRoster .ov-levelups{margin-top:6px;padding-top:6px;border-top:1px solid var(--line);
+    color:var(--warn);font-weight:700;}
+  #ovReset{margin-top:12px;font-size:.66rem;color:var(--dim);cursor:pointer;text-decoration:underline;}
+  #ovReset:hover{color:var(--text);}
+
   #tuning{position:fixed;top:16px;left:16px;font-size:.6rem;color:var(--dim);opacity:.55;max-width:200px;z-index:15;}
   #tuning:hover{opacity:1;}
 
@@ -138,7 +147,7 @@
 <div id="vignette"></div>
 <div id="tooltip"></div>
 <div id="log"></div>
-<div id="tuning">Step 1-4 combat slice · placeholder art · tune constants at top of &lt;script&gt;</div>
+<div id="tuning">Progression Step 1 (persistence) atop the combat slice · placeholder art · tune constants at top of &lt;script&gt;</div>
 
 <div id="app">
   <h1>Combat Slice — <span>Momentum Prototype</span></h1>
@@ -158,8 +167,10 @@
 
 <div id="overlay">
   <h2 id="ovTitle">Combat Slice</h2>
-  <p id="ovText">4 virtue-embodiments vs. a 3-unit enemy team. Momentum drives turn order — push, pull, and punish.</p>
+  <p id="ovText">4 virtue-embodiments vs. a 3-unit enemy team. Your roster persists — levels, XP, and battle damage carry forward.</p>
+  <div id="ovRoster"></div>
   <button id="ovBtn">Start Battle</button>
+  <div id="ovReset">Reset saved progress</div>
 </div>
 
 <script>
@@ -177,6 +188,11 @@ const TUNING = {
   HITPAUSE_ULT_MS: 260,
   SHAKE_ULT_SLOWMO: 0.35,
   SHAKE_ULT_SLOWMO_MS: 550,
+
+  // --- progression layer (Step 1: persistence) ---
+  XP_PER_WIN: 40,           // placeholder flat reward; real per-battle economy is spec §10
+  LEVEL_CAP: 100,           // progression_slice_spec.md §4.0/§4.6
+  POINTS_PER_LEVEL: 3,      // placeholder pool; real rarity-based table lands in Step 2
 };
 
 /* ---------------- ROSTER ---------------- */
@@ -194,6 +210,51 @@ const ENEMY_DEFS = [
 
 const AFF_CYCLE = {Judgment:'Life', Life:'Revelation', Revelation:'Judgment'};
 
+/* ---------------- PERSISTENCE (progression layer, Step 1) ----------------
+   Each player unit gets a persistent record: level, xp, allocatedPoints{},
+   gear[6], baseStats. It survives across battles (HP/level carry into the
+   next fight) and across sessions (saved to localStorage). Allocation
+   spending, gear, and the real rarity-based points/level table are Step 2/3 —
+   this step only proves the state carries. */
+const SAVE_KEY = 'trueserve_progression_save_v1';
+
+function xpToNext(level){ return Math.round(50 * Math.pow(level, 1.5)); }
+
+function freshRosterUnit(def){
+  return {
+    id: def.id,
+    level: 1,
+    xp: 0,
+    unspentPoints: 0,
+    allocatedPoints: {HP:0, ATK:0, DEF:0, SPD:0, POT:0, RES:0}, // spent points — Step 2
+    gear: [null, null, null, null, null, null],                 // Step 3
+    baseStats: {maxHP:def.maxHP, ATK:def.ATK, DEF:def.DEF, SPD:def.SPD,
+                CRIT_RATE:def.CRIT_RATE, CRIT_DMG:def.CRIT_DMG, POT:def.POT, RES:def.RES},
+    currentHP: def.maxHP,
+  };
+}
+
+function loadRoster(){
+  try{
+    const raw = localStorage.getItem(SAVE_KEY);
+    if(raw){
+      const saved = JSON.parse(raw);
+      const byId = {};
+      for(const r of saved.units||[]) byId[r.id] = r;
+      // preserve saved progress for known units; freshly-added roster rows start clean
+      return PLAYER_DEFS.map(d => byId[d.id] || freshRosterUnit(d));
+    }
+  }catch(e){ /* corrupt save — fall through to a clean roster */ }
+  return PLAYER_DEFS.map(freshRosterUnit);
+}
+
+function saveRoster(){
+  localStorage.setItem(SAVE_KEY, JSON.stringify({units: roster}));
+}
+
+let roster = loadRoster();
+function rosterFor(id){ return roster.find(r=>r.id===id); }
+
 /* ---------------- STATE ---------------- */
 let units = [];
 let logEl = document.getElementById('log');
@@ -205,11 +266,14 @@ let awaitingTarget = null; // {skillKey, validTeam, resolve}
 function sleep(ms){ return new Promise(r=>setTimeout(r,ms)); }
 
 function freshUnit(def, team){
+  const rec = team==='player' ? rosterFor(def.id) : null;
+  const hp = rec ? Math.min(rec.currentHP, def.maxHP) : def.maxHP;
   return {
-    ...def, team, hp:def.maxHP, momentum: Math.random()*20, alive:true,
+    ...def, team, hp: Math.max(1, hp), momentum: Math.random()*20, alive:true,
     shield:0, buffs:[], debuffs:[],
     cd:{active:0, ult:0},
     stacks:0, // persistence / forbearance
+    level: rec ? rec.level : 1,
     el:null,
   };
 }
@@ -238,7 +302,7 @@ function buildUnitDOM(){
       <div class="ultpip" data-role="ultpip">${u.cd.ult||''}</div>
       <div class="swatch" style="background:${u.color}"><div class="shield-tick" data-role="shieldtick" style="width:0%"></div></div>
       <div class="name">${u.name}</div>
-      <div class="aff">${u.affinity}</div>
+      <div class="aff">${u.affinity}${u.team==='player'?' · Lv '+u.level:''}</div>
       <div class="hpnum"><span data-role="hpnum">${u.hp}/${u.maxHP}</span></div>
       <div class="bar hp"><i data-role="hpbar" style="width:100%"></i></div>
       <div class="bar mom"><i data-role="mombar" style="width:0%"></i></div>
@@ -904,8 +968,53 @@ async function runBattle(){
   }
 }
 
+/* ---------------- PROGRESSION: rewards + roster display ---------------- */
+function grantBattleRewards(result){
+  if(result!=='win'){
+    // No run/escrow system yet (Step 4) — a loss just restores HP for the next attempt.
+    // Levels/XP already earned are kept regardless.
+    for(const rec of roster) rec.currentHP = rec.baseStats.maxHP;
+    saveRoster();
+    return [];
+  }
+  const levelUps = [];
+  for(const u of units.filter(x=>x.team==='player')){
+    const rec = rosterFor(u.id);
+    // Carry damage forward (the persistence checkpoint); floor at 1 so a unit that
+    // fell mid-fight but whose team still won isn't stuck at 0 HP with no revive system yet.
+    rec.currentHP = Math.max(1, Math.round(u.hp));
+    rec.xp += TUNING.XP_PER_WIN;
+    while(rec.level < TUNING.LEVEL_CAP && rec.xp >= xpToNext(rec.level)){
+      rec.xp -= xpToNext(rec.level);
+      rec.level++;
+      rec.unspentPoints += TUNING.POINTS_PER_LEVEL;
+      levelUps.push({name:u.name, level:rec.level});
+    }
+  }
+  saveRoster();
+  return levelUps;
+}
+
+function renderRosterOverlay(levelUps){
+  const el = document.getElementById('ovRoster');
+  el.innerHTML = roster.map(r=>{
+    const def = PLAYER_DEFS.find(d=>d.id===r.id);
+    const maxed = r.level>=TUNING.LEVEL_CAP;
+    const need = maxed ? 'MAX' : xpToNext(r.level);
+    return `<div class="ov-unit"><b>${def.name}</b> <span class="dim">Lv ${r.level}${maxed?'':' · '+r.xp+'/'+need+' XP'}</span>
+      <span class="dim">HP ${Math.round(r.currentHP)}/${r.baseStats.maxHP}</span></div>`;
+  }).join('');
+  if(levelUps && levelUps.length){
+    const lu = document.createElement('div');
+    lu.className='ov-levelups';
+    lu.textContent = levelUps.map(l=>`${l.name} reached level ${l.level}!`).join('   ');
+    el.appendChild(lu);
+  }
+}
+
 function endBattle(result){
   gameOver = true;
+  const levelUps = grantBattleRewards(result);
   const overlay = document.getElementById('overlay');
   overlay.classList.remove('hidden');
   const title = document.getElementById('ovTitle');
@@ -915,14 +1024,16 @@ function endBattle(result){
     title.textContent = 'Gloria';
     title.className='glow-win';
     text.textContent = 'The enemy team has fallen. The party stands unison, light-bloomed, in victory.';
+    btn.textContent = 'Continue';
     sfx.win();
   } else {
     title.textContent = 'Defeated';
     title.className='';
-    text.textContent = 'The party has fallen. The fight is lost.';
+    text.textContent = 'The party has fallen. Levels and XP are kept — HP is restored for the next attempt.';
+    btn.textContent = 'Try Again';
     sfx.lose();
   }
-  btn.textContent = 'Restart';
+  renderRosterOverlay(levelUps);
   logMsg(result==='win' ? 'Victory — Gloria.' : 'Defeat.', result==='win'?'ult':'debuff');
 }
 
@@ -932,6 +1043,14 @@ document.getElementById('ovBtn').addEventListener('click', ()=>{
   resetBattle();
   runBattle();
 });
+document.getElementById('ovReset').addEventListener('click', ()=>{
+  localStorage.removeItem(SAVE_KEY);
+  roster = PLAYER_DEFS.map(freshRosterUnit);
+  saveRoster();
+  renderRosterOverlay();
+  logMsg('Saved progress reset.', 'debuff');
+});
+renderRosterOverlay();
 </script>
 </body>
 </html>
