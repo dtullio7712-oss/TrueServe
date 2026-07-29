@@ -127,8 +127,42 @@
   #ovRoster .ov-unit .dim{color:var(--dim);}
   #ovRoster .ov-levelups{margin-top:6px;padding-top:6px;border-top:1px solid var(--line);
     color:var(--warn);font-weight:700;}
+  #ovBtnRow{display:flex;gap:10px;}
+  #ovManageBtn{background:var(--panel2);border:1px solid var(--line);color:var(--text);font-weight:700;
+    padding:12px 22px;border-radius:8px;font-size:.9rem;cursor:pointer;}
+  #ovManageBtn:hover{border-color:var(--warn);color:var(--warn);}
   #ovReset{margin-top:12px;font-size:.66rem;color:var(--dim);cursor:pointer;text-decoration:underline;}
   #ovReset:hover{color:var(--text);}
+
+  #hubOverlay{position:fixed;inset:0;background:rgba(8,9,12,.92);z-index:35;
+    display:flex;align-items:center;justify-content:center;}
+  #hubOverlay.hidden{display:none;}
+  #hubPanel{width:100%;max-width:760px;max-height:88vh;overflow-y:auto;background:var(--panel);
+    border:1px solid var(--line);border-radius:12px;padding:18px 22px;}
+  #hubHeader{display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;}
+  #hubHeader h2{margin:0;font-size:1.2rem;}
+  #hubHeader button{background:var(--warn);border:none;color:#221200;font-weight:700;padding:8px 18px;
+    border-radius:8px;cursor:pointer;}
+  #hubHint{color:var(--dim);font-size:.72rem;margin:2px 0 14px;}
+  .hub-unit{background:var(--panel2);border:1px solid var(--line);border-radius:10px;
+    padding:12px 14px;margin-bottom:12px;}
+  .hub-unit-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;flex-wrap:wrap;gap:6px;}
+  .hub-unit-head b{font-size:.9rem;}
+  .hub-unit-head .dim{color:var(--dim);font-size:.7rem;}
+  .hub-pts{color:var(--warn);font-weight:700;font-size:.75rem;}
+  .hub-respec{background:transparent;border:1px solid var(--line);color:var(--dim);font-size:.62rem;
+    padding:4px 9px;border-radius:6px;cursor:pointer;}
+  .hub-respec:hover{border-color:var(--bad);color:var(--bad);}
+  .hub-stat-row{display:grid;grid-template-columns:36px 1fr 90px 60px;align-items:center;
+    gap:8px;padding:3px 0;font-size:.72rem;}
+  .hub-stat-row .stat-label{color:var(--dim);font-weight:700;}
+  .hub-stat-row .stat-delta{color:var(--good);}
+  .hub-stat-row .stat-delta.maxed{color:var(--warn);}
+  .hub-stat-btns{display:flex;gap:4px;justify-content:flex-end;}
+  .hub-stat-btns button{width:24px;height:24px;border-radius:5px;background:#0d0f14;
+    border:1px solid var(--line);color:var(--text);cursor:pointer;font-size:.8rem;line-height:1;}
+  .hub-stat-btns button:hover:not(:disabled){border-color:var(--warn);color:var(--warn);}
+  .hub-stat-btns button:disabled{opacity:.3;cursor:not-allowed;}
 
   #tuning{position:fixed;top:16px;left:16px;font-size:.6rem;color:var(--dim);opacity:.55;max-width:200px;z-index:15;}
   #tuning:hover{opacity:1;}
@@ -169,8 +203,22 @@
   <h2 id="ovTitle">Combat Slice</h2>
   <p id="ovText">4 virtue-embodiments vs. a 3-unit enemy team. Your roster persists — levels, XP, and battle damage carry forward.</p>
   <div id="ovRoster"></div>
-  <button id="ovBtn">Start Battle</button>
+  <div id="ovBtnRow">
+    <button id="ovBtn">Start Battle</button>
+    <button id="ovManageBtn">Manage Roster</button>
+  </div>
   <div id="ovReset">Reset saved progress</div>
+</div>
+
+<div id="hubOverlay" class="hidden">
+  <div id="hubPanel">
+    <div id="hubHeader">
+      <h2>Management Hub</h2>
+      <button id="hubCloseBtn">Done</button>
+    </div>
+    <p id="hubHint">Spend unspent level-up points per unit. Growth is a % of that unit's own base stat (spec §4.2); respec is free for this build.</p>
+    <div id="hubUnits"></div>
+  </div>
 </div>
 
 <script>
@@ -192,15 +240,86 @@ const TUNING = {
   // --- progression layer (Step 1: persistence) ---
   XP_PER_WIN: 40,           // placeholder flat reward; real per-battle economy is spec §10
   LEVEL_CAP: 100,           // progression_slice_spec.md §4.0/§4.6
-  POINTS_PER_LEVEL: 3,      // placeholder pool; real rarity-based table lands in Step 2
 };
+
+/* ---------------- ALLOCATION CONFIG (Step 2) ----------------
+   Derived per the Step-2 sanity-check writeup (see PROJECT_CONTROL.md / the
+   session log). Growth is percentage-of-own-base per point (spec §4.2).
+   POINT_PCT is a FLAT rate calibrated against the Common rarity's full
+   career point pool, then HARD-CLAMPED per stat at ALLOC.TARGET_PCT — this
+   is what lets a Common unit still reach the same per-stat ceiling as a
+   Legendary (every unit stays valuable), while a Legendary's larger pool
+   buys genuine flexibility: leftover points to also invest in a 2nd stat,
+   rather than a bigger single-stat ceiling. SPD uses a separate soft-cost
+   guard (spec §4.4) instead of a hard clamp — buying SPD past +50% of base
+   costs double, rather than being blocked outright.
+   All of it — targets, the milestone multiplier, the reference rarity — is
+   one edit here; nothing about the formulas below needs to change to retune. */
+const ALLOC = {
+  REF_RARITY: 'C',
+  POINTS_PER_LEVEL: {C:3, R:4, E:5, L:6},              // spec §3.2
+  MILESTONE_LEVELS: new Set([10,20,30,40,50,60,70,80,90,100]),
+  MILESTONE_POOL_MULT: 3,     // a milestone level-up grants 3x the ordinary pool (chosen dial)
+  TARGET_PCT: {HP:0.50, ATK:0.45, DEF:0.45, SPD:0.30, POT:0.20, RES:0.20}, // full single-stat-dump ceiling
+  SPD_SOFT_CAP_PCT: 0.50,     // spec §4.4: past +50% of base SPD from allocation...
+  SPD_SOFT_CAP_COST_MULT: 2,  // ...each further SPD point costs 2 allocation points
+};
+
+function totalCareerPoints(rarity){
+  const perLevel = ALLOC.POINTS_PER_LEVEL[rarity];
+  const totalLevelUps = TUNING.LEVEL_CAP - 1;               // 99 for a level-1-to-100 career
+  const milestoneEvents = ALLOC.MILESTONE_LEVELS.size;       // 10
+  const ordinaryEvents = totalLevelUps - milestoneEvents;    // 89
+  return ordinaryEvents*perLevel + milestoneEvents*perLevel*ALLOC.MILESTONE_POOL_MULT;
+}
+const ALLOC_REF_POOL = totalCareerPoints(ALLOC.REF_RARITY);  // 357 at current dials
+
+const POINT_PCT = {};
+for(const stat of ['HP','ATK','DEF','SPD','POT','RES']) POINT_PCT[stat] = ALLOC.TARGET_PCT[stat] / ALLOC_REF_POOL;
+const SPD_THRESHOLD_POINTS = Math.floor(ALLOC.SPD_SOFT_CAP_PCT / POINT_PCT.SPD); // SPD points before cost doubles
+
+// % growth (of the unit's own base) a given number of spent points buys in `stat`.
+function statGainPct(stat, points){
+  if(stat==='SPD'){
+    if(points<=SPD_THRESHOLD_POINTS) return points*POINT_PCT.SPD;
+    return ALLOC.SPD_SOFT_CAP_PCT + (points-SPD_THRESHOLD_POINTS)*POINT_PCT.SPD;
+  }
+  return Math.min(points*POINT_PCT[stat], ALLOC.TARGET_PCT[stat]);
+}
+// pool-point cost of buying the (spentSoFar+1)th SPD point — 1 below the soft cap, 2 above it.
+function nextSpdCost(spentSoFar){ return spentSoFar < SPD_THRESHOLD_POINTS ? 1 : ALLOC.SPD_SOFT_CAP_COST_MULT; }
+// total pool cost already paid for `n` SPD points (used to refund a respec correctly).
+function spdTotalCost(n){
+  const underCap = Math.min(n, SPD_THRESHOLD_POINTS);
+  const overCap = Math.max(0, n-SPD_THRESHOLD_POINTS);
+  return underCap + overCap*ALLOC.SPD_SOFT_CAP_COST_MULT;
+}
+function statMaxedOut(stat, points){
+  return stat==='SPD' ? false : points*POINT_PCT[stat] >= ALLOC.TARGET_PCT[stat];
+}
+
+function effectiveStats(rec){
+  const b = rec.baseStats, ap = rec.allocatedPoints;
+  return {
+    maxHP: b.maxHP * (1+statGainPct('HP', ap.HP)),
+    ATK:   b.ATK   * (1+statGainPct('ATK', ap.ATK)),
+    DEF:   b.DEF   * (1+statGainPct('DEF', ap.DEF)),
+    SPD:   b.SPD   * (1+statGainPct('SPD', ap.SPD)),
+    POT:   b.POT   * (1+statGainPct('POT', ap.POT)),
+    RES:   b.RES   * (1+statGainPct('RES', ap.RES)),
+    CRIT_RATE: b.CRIT_RATE, CRIT_DMG: b.CRIT_DMG,
+  };
+}
 
 /* ---------------- ROSTER ---------------- */
 const PLAYER_DEFS = [
-  {id:'dil',name:'Diligence',affinity:'Revelation',maxHP:1050,ATK:215,DEF:150,SPD:118,CRIT_RATE:.15,CRIT_DMG:.5,POT:.15,RES:.15,color:'#4f8cff'},
-  {id:'pat',name:'Patience', affinity:'Mystery',   maxHP:1150,ATK:195,DEF:175,SPD:100,CRIT_RATE:.12,CRIT_DMG:.5,POT:.10,RES:.20,color:'#38b2ac'},
-  {id:'cha',name:'Charity',  affinity:'Life',      maxHP:1300,ATK:160,DEF:210,SPD:104,CRIT_RATE:.10,CRIT_DMG:.5,POT:.10,RES:.25,color:'#ecc94b'},
-  {id:'jus',name:'Justice',  affinity:'Judgment',  maxHP:950, ATK:240,DEF:140,SPD:122,CRIT_RATE:.20,CRIT_DMG:.55,POT:.20,RES:.15,color:'#9f7aea'},
+  // rarity drives points/level (§3.2) only — these 4 statlines are already the
+  // playtested, hand-tuned baseStats per the reconciliation, so rarity does NOT
+  // additionally multiply them (that would double-count the tuning).
+  {id:'dil',name:'Diligence',affinity:'Revelation',rarity:'R',maxHP:1050,ATK:215,DEF:150,SPD:118,CRIT_RATE:.15,CRIT_DMG:.5,POT:.15,RES:.15,color:'#4f8cff'},
+  {id:'pat',name:'Patience', affinity:'Mystery',   rarity:'C',maxHP:1150,ATK:195,DEF:175,SPD:100,CRIT_RATE:.12,CRIT_DMG:.5,POT:.10,RES:.20,color:'#38b2ac'},
+  {id:'cha',name:'Charity',  affinity:'Life',      rarity:'E',maxHP:1300,ATK:160,DEF:210,SPD:104,CRIT_RATE:.10,CRIT_DMG:.5,POT:.10,RES:.25,color:'#ecc94b'},
+  {id:'jus',name:'Justice',  affinity:'Judgment',  rarity:'L',maxHP:950, ATK:240,DEF:140,SPD:122,CRIT_RATE:.20,CRIT_DMG:.55,POT:.20,RES:.15,color:'#9f7aea'},
 ];
 const ENEMY_DEFS = [
   {id:'mar',name:'Marauder', affinity:'Majesty',   maxHP:900, ATK:190,DEF:130,SPD:112,CRIT_RATE:.10,CRIT_DMG:.5,POT:.10,RES:.10,color:'#e53e3e'},
@@ -267,9 +386,15 @@ function sleep(ms){ return new Promise(r=>setTimeout(r,ms)); }
 
 function freshUnit(def, team){
   const rec = team==='player' ? rosterFor(def.id) : null;
-  const hp = rec ? Math.min(rec.currentHP, def.maxHP) : def.maxHP;
+  const raw = rec ? effectiveStats(rec)
+    : {maxHP:def.maxHP, ATK:def.ATK, DEF:def.DEF, SPD:def.SPD, CRIT_RATE:def.CRIT_RATE, CRIT_DMG:def.CRIT_DMG, POT:def.POT, RES:def.RES};
+  // round the allocation-scaled stats to whole numbers for clean display; POT/RES stay fractional (they're %-stats)
+  const stats = {...raw, maxHP:Math.round(raw.maxHP), ATK:Math.round(raw.ATK), DEF:Math.round(raw.DEF), SPD:Math.round(raw.SPD)};
+  const hp = rec ? Math.min(rec.currentHP, stats.maxHP) : stats.maxHP;
   return {
-    ...def, team, hp: Math.max(1, hp), momentum: Math.random()*20, alive:true,
+    id:def.id, name:def.name, affinity:def.affinity, color:def.color,
+    ...stats,
+    team, hp: Math.max(1, hp), momentum: Math.random()*20, alive:true,
     shield:0, buffs:[], debuffs:[],
     cd:{active:0, ult:0},
     stacks:0, // persistence / forbearance
@@ -980,6 +1105,7 @@ function grantBattleRewards(result){
   const levelUps = [];
   for(const u of units.filter(x=>x.team==='player')){
     const rec = rosterFor(u.id);
+    const def = PLAYER_DEFS.find(d=>d.id===u.id);
     // Carry damage forward (the persistence checkpoint); floor at 1 so a unit that
     // fell mid-fight but whose team still won isn't stuck at 0 HP with no revive system yet.
     rec.currentHP = Math.max(1, Math.round(u.hp));
@@ -987,8 +1113,9 @@ function grantBattleRewards(result){
     while(rec.level < TUNING.LEVEL_CAP && rec.xp >= xpToNext(rec.level)){
       rec.xp -= xpToNext(rec.level);
       rec.level++;
-      rec.unspentPoints += TUNING.POINTS_PER_LEVEL;
-      levelUps.push({name:u.name, level:rec.level});
+      const isMilestone = ALLOC.MILESTONE_LEVELS.has(rec.level);
+      rec.unspentPoints += ALLOC.POINTS_PER_LEVEL[def.rarity] * (isMilestone ? ALLOC.MILESTONE_POOL_MULT : 1);
+      levelUps.push({name:u.name, level:rec.level, milestone:isMilestone});
     }
   }
   saveRoster();
@@ -1001,15 +1128,104 @@ function renderRosterOverlay(levelUps){
     const def = PLAYER_DEFS.find(d=>d.id===r.id);
     const maxed = r.level>=TUNING.LEVEL_CAP;
     const need = maxed ? 'MAX' : xpToNext(r.level);
-    return `<div class="ov-unit"><b>${def.name}</b> <span class="dim">Lv ${r.level}${maxed?'':' · '+r.xp+'/'+need+' XP'}</span>
-      <span class="dim">HP ${Math.round(r.currentHP)}/${r.baseStats.maxHP}</span></div>`;
+    const pts = r.unspentPoints>0 ? ` · <span style="color:var(--warn)">${r.unspentPoints} pts to spend</span>` : '';
+    return `<div class="ov-unit"><b>${def.name}</b> <span class="dim">[${def.rarity}] Lv ${r.level}${maxed?'':' · '+r.xp+'/'+need+' XP'}${pts}</span>
+      <span class="dim">HP ${Math.round(r.currentHP)}/${Math.round(effectiveStats(r).maxHP)}</span></div>`;
   }).join('');
   if(levelUps && levelUps.length){
     const lu = document.createElement('div');
     lu.className='ov-levelups';
-    lu.textContent = levelUps.map(l=>`${l.name} reached level ${l.level}!`).join('   ');
+    lu.textContent = levelUps.map(l=>`${l.name} reached level ${l.level}${l.milestone?' — milestone!':'!'}`).join('   ');
     el.appendChild(lu);
   }
+}
+
+/* ---------------- MANAGEMENT HUB (Step 2) ---------------- */
+const STAT_LIST = ['HP','ATK','DEF','SPD','POT','RES'];
+const STAT_FIELD = {HP:'maxHP', ATK:'ATK', DEF:'DEF', SPD:'SPD', POT:'POT', RES:'RES'};
+const STAT_FMT = {
+  HP:v=>Math.round(v), ATK:v=>Math.round(v), DEF:v=>Math.round(v), SPD:v=>Math.round(v),
+  POT:v=>(v*100).toFixed(1)+'%', RES:v=>(v*100).toFixed(1)+'%',
+};
+
+// pool-point cost to buy (spend=true) or refund (spend=false) 1 point of `stat` right now.
+function pointCost(rec, stat, spend){
+  if(stat!=='SPD') return 1;
+  return spend ? nextSpdCost(rec.allocatedPoints.SPD)
+               : (rec.allocatedPoints.SPD>SPD_THRESHOLD_POINTS ? ALLOC.SPD_SOFT_CAP_COST_MULT : 1);
+}
+
+function spendPoint(rec, stat){
+  if(stat!=='SPD' && statMaxedOut(stat, rec.allocatedPoints[stat])) return false;
+  const cost = pointCost(rec, stat, true);
+  if(rec.unspentPoints < cost) return false;
+  rec.unspentPoints -= cost;
+  rec.allocatedPoints[stat]++;
+  return true;
+}
+
+function undoPoint(rec, stat){
+  if(rec.allocatedPoints[stat] <= 0) return false;
+  const refund = pointCost(rec, stat, false);
+  rec.allocatedPoints[stat]--;
+  rec.unspentPoints += refund;
+  return true;
+}
+
+function respecUnit(rec){
+  const ap = rec.allocatedPoints;
+  rec.unspentPoints += ap.HP + ap.ATK + ap.DEF + ap.POT + ap.RES + spdTotalCost(ap.SPD);
+  for(const s of STAT_LIST) ap[s] = 0;
+}
+
+function renderHub(){
+  const wrap = document.getElementById('hubUnits');
+  wrap.innerHTML = '';
+  for(const rec of roster){
+    const def = PLAYER_DEFS.find(d=>d.id===rec.id);
+    const eff = effectiveStats(rec);
+    const card = document.createElement('div');
+    card.className = 'hub-unit';
+    card.innerHTML = `
+      <div class="hub-unit-head">
+        <div><b>${def.name}</b> <span class="dim">[${def.rarity}] ${def.affinity} · Lv ${rec.level}</span></div>
+        <div><span class="hub-pts">${rec.unspentPoints} pts</span>
+          <button class="hub-respec" data-id="${rec.id}">Respec</button></div>
+      </div>
+      <div class="hub-stats" data-id="${rec.id}"></div>
+    `;
+    wrap.appendChild(card);
+    const statsEl = card.querySelector('.hub-stats');
+    for(const stat of STAT_LIST){
+      const row = document.createElement('div');
+      row.className = 'hub-stat-row';
+      const base = rec.baseStats[STAT_FIELD[stat]];
+      const cur = eff[STAT_FIELD[stat]];
+      const gainPct = statGainPct(stat, rec.allocatedPoints[stat]);
+      const maxed = stat!=='SPD' && statMaxedOut(stat, rec.allocatedPoints[stat]);
+      const canSpend = !maxed && rec.unspentPoints >= pointCost(rec, stat, true);
+      row.innerHTML = `
+        <div class="stat-label">${stat}</div>
+        <div>${STAT_FMT[stat](base)} &rarr; <b>${STAT_FMT[stat](cur)}</b></div>
+        <div class="stat-delta${maxed?' maxed':''}">+${(gainPct*100).toFixed(1)}%${maxed?' MAX':''}</div>
+        <div class="hub-stat-btns">
+          <button data-act="undo" data-stat="${stat}" ${rec.allocatedPoints[stat]<=0?'disabled':''}>&minus;</button>
+          <button data-act="spend" data-stat="${stat}" ${canSpend?'':'disabled'}>+</button>
+        </div>
+      `;
+      statsEl.appendChild(row);
+    }
+  }
+}
+
+function openHub(){
+  renderHub();
+  document.getElementById('hubOverlay').classList.remove('hidden');
+}
+function closeHub(){
+  document.getElementById('hubOverlay').classList.add('hidden');
+  saveRoster();
+  renderRosterOverlay();
 }
 
 function endBattle(result){
@@ -1049,6 +1265,22 @@ document.getElementById('ovReset').addEventListener('click', ()=>{
   saveRoster();
   renderRosterOverlay();
   logMsg('Saved progress reset.', 'debuff');
+});
+document.getElementById('ovManageBtn').addEventListener('click', openHub);
+document.getElementById('hubCloseBtn').addEventListener('click', closeHub);
+document.getElementById('hubUnits').addEventListener('click', (e)=>{
+  const respecBtn = e.target.closest('.hub-respec');
+  if(respecBtn){
+    respecUnit(rosterFor(respecBtn.dataset.id));
+    renderHub();
+    return;
+  }
+  const btn = e.target.closest('button[data-act]');
+  if(!btn) return;
+  const rec = rosterFor(btn.closest('.hub-stats').dataset.id);
+  if(btn.dataset.act==='spend') spendPoint(rec, btn.dataset.stat);
+  else undoPoint(rec, btn.dataset.stat);
+  renderHub();
 });
 renderRosterOverlay();
 </script>
