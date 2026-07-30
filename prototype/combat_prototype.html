@@ -153,7 +153,7 @@
   .hub-respec{background:transparent;border:1px solid var(--line);color:var(--dim);font-size:.62rem;
     padding:4px 9px;border-radius:6px;cursor:pointer;}
   .hub-respec:hover{border-color:var(--bad);color:var(--bad);}
-  .hub-stat-row{display:grid;grid-template-columns:36px 1fr 90px 60px;align-items:center;
+  .hub-stat-row{display:grid;grid-template-columns:36px 140px 1fr 60px;align-items:center;
     gap:8px;padding:3px 0;font-size:.72rem;}
   .hub-stat-row .stat-label{color:var(--dim);font-weight:700;}
   .hub-stat-row .stat-delta{color:var(--good);}
@@ -163,6 +163,30 @@
     border:1px solid var(--line);color:var(--text);cursor:pointer;font-size:.8rem;line-height:1;}
   .hub-stat-btns button:hover:not(:disabled){border-color:var(--warn);color:var(--warn);}
   .hub-stat-btns button:disabled{opacity:.3;cursor:not-allowed;}
+  .stat-delta .gear-part{color:#63b3ed;}
+  .stat-delta .gear-part.capped{color:var(--bad);}
+
+  #hubInventory{background:var(--panel2);border:1px solid var(--line);border-radius:10px;
+    padding:10px 14px;margin-bottom:16px;}
+  #hubInvHeader{display:flex;align-items:center;gap:10px;flex-wrap:wrap;}
+  #hubInvHeader b{font-size:.82rem;}
+  #hubGenGear{margin-left:auto;background:var(--warn);border:none;color:#221200;font-weight:700;
+    padding:6px 12px;border-radius:7px;font-size:.68rem;cursor:pointer;}
+  #hubInvHint{color:var(--dim);font-size:.6rem;margin-top:4px;}
+  #hubInvList{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px;}
+  .gear-chip{font-size:.62rem;padding:4px 8px;border-radius:6px;background:#0d0f14;
+    border:1px solid var(--line);color:var(--dim);}
+  .gear-chip b{color:var(--text);}
+
+  .hub-gear{margin-top:10px;padding-top:10px;border-top:1px solid var(--line);}
+  .hub-gear-title{font-size:.68rem;color:var(--dim);text-transform:uppercase;letter-spacing:.04em;margin-bottom:6px;}
+  .hub-gear-row{display:grid;grid-template-columns:64px 1fr 190px;align-items:center;gap:8px;
+    padding:3px 0;font-size:.68rem;}
+  .hub-gear-row .gear-slot-name{color:var(--dim);font-weight:700;}
+  .hub-gear-row .gear-piece-desc{color:var(--text);}
+  .hub-gear-row .gear-piece-desc .dim{color:var(--dim);}
+  .hub-gear-row select{background:#0d0f14;border:1px solid var(--line);color:var(--text);
+    border-radius:6px;font-size:.64rem;padding:3px 4px;max-width:190px;}
 
   #tuning{position:fixed;top:16px;left:16px;font-size:.6rem;color:var(--dim);opacity:.55;max-width:200px;z-index:15;}
   #tuning:hover{opacity:1;}
@@ -217,6 +241,14 @@
       <button id="hubCloseBtn">Done</button>
     </div>
     <p id="hubHint">Spend unspent level-up points per unit. Growth is a % of that unit's own base stat (spec §4.2); respec is free for this build.</p>
+    <div id="hubInventory">
+      <div id="hubInvHeader">
+        <b>Gear Inventory</b> <span class="dim" id="hubInvCount"></span>
+        <button id="hubGenGear">+ Generate Sample Piece</button>
+      </div>
+      <div id="hubInvHint">No crafting/drops yet (Steps 5–6) — this button is a placeholder so equip/unequip is testable now.</div>
+      <div id="hubInvList"></div>
+    </div>
     <div id="hubUnits"></div>
   </div>
 </div>
@@ -298,16 +330,37 @@ function statMaxedOut(stat, points){
   return stat==='SPD' ? false : points*POINT_PCT[stat] >= ALLOC.TARGET_PCT[stat];
 }
 
-function effectiveStats(rec){
-  const b = rec.baseStats, ap = rec.allocatedPoints;
+// allocation-only gain, before gear — used both by effectiveStats and by the
+// gear budget cap (spec §5.2: gear capped at ~40% of allocated+base value).
+function allocGainFor(rec){
+  const ap = rec.allocatedPoints;
   return {
-    maxHP: b.maxHP * (1+statGainPct('HP', ap.HP)),
-    ATK:   b.ATK   * (1+statGainPct('ATK', ap.ATK)),
-    DEF:   b.DEF   * (1+statGainPct('DEF', ap.DEF)),
-    SPD:   b.SPD   * (1+statGainPct('SPD', ap.SPD)),
-    POT:   b.POT   * (1+statGainPct('POT', ap.POT)),
-    RES:   b.RES   * (1+statGainPct('RES', ap.RES)),
-    CRIT_RATE: b.CRIT_RATE, CRIT_DMG: b.CRIT_DMG,
+    HP: statGainPct('HP', ap.HP), ATK: statGainPct('ATK', ap.ATK), DEF: statGainPct('DEF', ap.DEF),
+    SPD: statGainPct('SPD', ap.SPD), POT: statGainPct('POT', ap.POT), RES: statGainPct('RES', ap.RES),
+  };
+}
+
+function effectiveStats(rec){
+  const b = rec.baseStats;
+  const alloc = allocGainFor(rec);
+  const gearRaw = rawGearContribution(rec);          // uncapped sum of equipped %/flat gear values
+  const gear = {};                                    // capped, %-of-base contribution per core stat
+  for(const stat of ['HP','ATK','DEF','POT','RES']){
+    gear[stat] = Math.min(gearRaw[stat], GEAR_BUDGET_CAP_PCT * (1+alloc[stat]));
+  }
+  const spdAllocated = b.SPD * (1+alloc.SPD);
+  const spdGearFlat = Math.min(gearRaw.SPD, GEAR_BUDGET_CAP_PCT * spdAllocated); // SPD gear is a flat add, not %
+
+  return {
+    maxHP: b.maxHP * (1+alloc.HP+gear.HP),
+    ATK:   b.ATK   * (1+alloc.ATK+gear.ATK),
+    DEF:   b.DEF   * (1+alloc.DEF+gear.DEF),
+    SPD:   spdAllocated + spdGearFlat,
+    POT:   b.POT   * (1+alloc.POT+gear.POT),
+    RES:   b.RES   * (1+alloc.RES+gear.RES),
+    CRIT_RATE: b.CRIT_RATE + gearRaw.CritRate,
+    CRIT_DMG:  b.CRIT_DMG  + gearRaw.CritDmg,
+    DUAL_CHANCE: gearRaw.DualAttackChance, // stat exists per spec §5.2; no dual-attack proc system in this slice yet
   };
 }
 
@@ -353,6 +406,9 @@ function freshRosterUnit(def){
   };
 }
 
+let gearInventory = [];   // every owned gear piece (equipped or not) — Step 3
+let gearIdCounter = 0;
+
 function loadRoster(){
   try{
     const raw = localStorage.getItem(SAVE_KEY);
@@ -360,19 +416,91 @@ function loadRoster(){
       const saved = JSON.parse(raw);
       const byId = {};
       for(const r of saved.units||[]) byId[r.id] = r;
+      gearInventory = saved.gear || [];
+      gearIdCounter = saved.gearIdCounter || 0;
       // preserve saved progress for known units; freshly-added roster rows start clean
       return PLAYER_DEFS.map(d => byId[d.id] || freshRosterUnit(d));
     }
   }catch(e){ /* corrupt save — fall through to a clean roster */ }
+  gearInventory = [];
+  gearIdCounter = 0;
   return PLAYER_DEFS.map(freshRosterUnit);
 }
 
 function saveRoster(){
-  localStorage.setItem(SAVE_KEY, JSON.stringify({units: roster}));
+  localStorage.setItem(SAVE_KEY, JSON.stringify({units: roster, gear: gearInventory, gearIdCounter}));
 }
 
 let roster = loadRoster();
 function rosterFor(id){ return roster.find(r=>r.id===id); }
+
+/* ---------------- GEAR (Step 3: equipment + substats, spec §5) ----------------
+   6 typed slots (weapon/armor/emblem fixed-main; boots/charm/relic choosable-main).
+   ATK/HP/DEF/POT/RES gear values are %-of-base, exactly like allocation (§4.2) —
+   that's what makes the §5.2 budget cap ("gear capped at ~40% of allocated+base
+   value") a simple comparison. SPD gear is a flat add per spec. CritRate/CritDmg/
+   DualAttackChance are gear-native stats outside the 6-core-stat allocation model
+   (spec §3), so the budget cap doesn't apply to them.
+   No crafting yet (that's Step 6) and no drops yet (Step 5) — "Generate Sample
+   Gear" in the hub is a placeholder acquisition method just so this step is
+   playable; it gets replaced, not extended, once Forge/drops land. */
+const SLOT_ORDER = ['weapon','armor','emblem','boots','charm','relic'];
+const SLOT_LABEL = {weapon:'Weapon', armor:'Armor', emblem:'Emblem', boots:'Boots', charm:'Charm', relic:'Relic'};
+const SLOT_MAIN_POOL = {
+  weapon:['ATK%'], armor:['HP%'], emblem:['DEF%'],       // fixed main
+  boots:['SPD','ATK%','HP%'], charm:['POT','RES','HP%'], relic:['CritRate','CritDmg','ATK%'], // choosable main
+};
+const SUBSTAT_RANGES = {  // spec §5.2, per roll
+  'ATK%':[0.03,0.07], 'HP%':[0.03,0.07], 'DEF%':[0.03,0.07],
+  SPD:[2,5], CritRate:[0.02,0.05], CritDmg:[0.04,0.08],
+  POT:[0.02,0.05], RES:[0.02,0.05], DualAttackChance:[0.02,0.05],
+};
+const SUBSTAT_POOL = Object.keys(SUBSTAT_RANGES);
+const GEAR_RARITY_SUBSTAT_COUNT = {C:1, R:2, E:3, L:4};     // spec §5.3
+const GEAR_RARITY_MAIN_MULT = {C:1.0, R:1.3, E:1.6, L:2.0}; // chosen dial — Step 6 replaces with real leveling math
+const GEAR_BUDGET_CAP_PCT = 0.40; // spec §5.2
+
+function rollInRange([lo,hi]){ return lo + Math.random()*(hi-lo); }
+function shuffleArr(arr){ for(let i=arr.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [arr[i],arr[j]]=[arr[j],arr[i]]; } return arr; }
+
+function generateGearPiece(slot, rarity){
+  const mainPool = SLOT_MAIN_POOL[slot];
+  const mainStatName = mainPool[Math.floor(Math.random()*mainPool.length)];
+  const mainStat = {stat:mainStatName, value: rollInRange(SUBSTAT_RANGES[mainStatName]) * GEAR_RARITY_MAIN_MULT[rarity]};
+  const subCount = GEAR_RARITY_SUBSTAT_COUNT[rarity];
+  const subPool = shuffleArr(SUBSTAT_POOL.filter(s=>s!==mainStatName));
+  const substats = subPool.slice(0, subCount).map(stat=>({stat, value: rollInRange(SUBSTAT_RANGES[stat])}));
+  gearIdCounter++;
+  return {id:'g'+gearIdCounter, slot, rarity, mainStat, substats};
+}
+
+function gearPiece(id){ return gearInventory.find(g=>g.id===id); }
+function equippedGearFor(rec){ return rec.gear.map(id=>id?gearPiece(id):null).filter(Boolean); }
+function unequippedGearOfSlot(slot){
+  const equippedIds = new Set(roster.flatMap(r=>r.gear.filter(Boolean)));
+  return gearInventory.filter(g=>g.slot===slot && !equippedIds.has(g.id));
+}
+
+// raw (uncapped) sum of every equipped piece's main+substats, bucketed by stat.
+function rawGearContribution(rec){
+  const sums = {HP:0, ATK:0, DEF:0, SPD:0, POT:0, RES:0, CritRate:0, CritDmg:0, DualAttackChance:0};
+  for(const piece of equippedGearFor(rec)){
+    for(const entry of [piece.mainStat, ...piece.substats]){
+      const key = entry.stat.replace('%','');
+      sums[key] += entry.value;
+    }
+  }
+  return sums;
+}
+
+function unequipSlot(rec, slotIdx){ rec.gear[slotIdx] = null; }
+function equipPiece(rec, slotIdx, pieceId){
+  for(const other of roster){          // a piece can only be equipped in one place
+    const idx = other.gear.indexOf(pieceId);
+    if(idx>=0) other.gear[idx] = null;
+  }
+  rec.gear[slotIdx] = pieceId;
+}
 
 /* ---------------- STATE ---------------- */
 let units = [];
@@ -1178,12 +1306,37 @@ function respecUnit(rec){
   for(const s of STAT_LIST) ap[s] = 0;
 }
 
+const GEAR_STAT_LABEL = {'ATK%':'ATK%', 'HP%':'HP%', 'DEF%':'DEF%', SPD:'SPD',
+  CritRate:'CRIT Rate', CritDmg:'CRIT DMG', POT:'Potency', RES:'Resolve', DualAttackChance:'Dual-Atk'};
+function gearValueStr(stat, value){ return stat==='SPD' ? '+'+value.toFixed(1) : '+'+(value*100).toFixed(1)+'%'; }
+function pieceLabel(piece){
+  const main = `${GEAR_STAT_LABEL[piece.mainStat.stat]} ${gearValueStr(piece.mainStat.stat, piece.mainStat.value)}`;
+  return `[${piece.rarity}] ${SLOT_LABEL[piece.slot]} · ${main} (${piece.substats.length} sub)`;
+}
+function pieceSubstatSummary(piece){
+  return piece.substats.length
+    ? piece.substats.map(s=>`${GEAR_STAT_LABEL[s.stat]} ${gearValueStr(s.stat,s.value)}`).join(', ')
+    : 'no substats';
+}
+
+function renderInventory(){
+  const equippedIds = new Set(roster.flatMap(r=>r.gear.filter(Boolean)));
+  const unequipped = gearInventory.filter(g=>!equippedIds.has(g.id));
+  document.getElementById('hubInvCount').textContent = `(${unequipped.length} unassigned / ${gearInventory.length} total)`;
+  document.getElementById('hubInvList').innerHTML = unequipped.length
+    ? unequipped.map(g=>`<span class="gear-chip">${pieceLabel(g)}</span>`).join('')
+    : '<span class="dim" style="font-size:.66rem;">No unassigned gear — generate a piece, or equip one already listed under a unit below.</span>';
+}
+
 function renderHub(){
+  renderInventory();
   const wrap = document.getElementById('hubUnits');
   wrap.innerHTML = '';
   for(const rec of roster){
     const def = PLAYER_DEFS.find(d=>d.id===rec.id);
     const eff = effectiveStats(rec);
+    const alloc = allocGainFor(rec);
+    const gearRaw = rawGearContribution(rec);
     const card = document.createElement('div');
     card.className = 'hub-unit';
     card.innerHTML = `
@@ -1201,13 +1354,27 @@ function renderHub(){
       row.className = 'hub-stat-row';
       const base = rec.baseStats[STAT_FIELD[stat]];
       const cur = eff[STAT_FIELD[stat]];
-      const gainPct = statGainPct(stat, rec.allocatedPoints[stat]);
+      const allocPct = statGainPct(stat, rec.allocatedPoints[stat]);
       const maxed = stat!=='SPD' && statMaxedOut(stat, rec.allocatedPoints[stat]);
       const canSpend = !maxed && rec.unspentPoints >= pointCost(rec, stat, true);
+
+      let gearStr = '';
+      if(stat==='SPD'){
+        const gearCap = GEAR_BUDGET_CAP_PCT * (base*(1+allocPct));
+        const gearApplied = Math.min(gearRaw.SPD, gearCap);
+        const capped = gearRaw.SPD > gearApplied + 0.05;
+        if(gearRaw.SPD>0) gearStr = ` <span class="gear-part${capped?' capped':''}">gear +${gearApplied.toFixed(1)}${capped?` (of +${gearRaw.SPD.toFixed(1)} rolled, capped)`:''}</span>`;
+      } else {
+        const gearCap = GEAR_BUDGET_CAP_PCT * (1+allocPct);
+        const gearApplied = Math.min(gearRaw[stat], gearCap);
+        const capped = gearRaw[stat] > gearApplied + 0.0005;
+        if(gearRaw[stat]>0) gearStr = ` <span class="gear-part${capped?' capped':''}">gear +${(gearApplied*100).toFixed(1)}%${capped?` (of +${(gearRaw[stat]*100).toFixed(1)}% rolled, capped)`:''}</span>`;
+      }
+
       row.innerHTML = `
         <div class="stat-label">${stat}</div>
         <div>${STAT_FMT[stat](base)} &rarr; <b>${STAT_FMT[stat](cur)}</b></div>
-        <div class="stat-delta${maxed?' maxed':''}">+${(gainPct*100).toFixed(1)}%${maxed?' MAX':''}</div>
+        <div class="stat-delta${maxed?' maxed':''}">alloc +${(allocPct*100).toFixed(1)}%${maxed?' MAX':''}${gearStr}</div>
         <div class="hub-stat-btns">
           <button data-act="undo" data-stat="${stat}" ${rec.allocatedPoints[stat]<=0?'disabled':''}>&minus;</button>
           <button data-act="spend" data-stat="${stat}" ${canSpend?'':'disabled'}>+</button>
@@ -1215,6 +1382,34 @@ function renderHub(){
       `;
       statsEl.appendChild(row);
     }
+    if(eff.CRIT_RATE>rec.baseStats.CRIT_RATE || eff.CRIT_DMG>rec.baseStats.CRIT_DMG || eff.DUAL_CHANCE>0){
+      const crit = document.createElement('div');
+      crit.className = 'hub-stat-row';
+      crit.style.gridTemplateColumns = '1fr';
+      crit.innerHTML = `<div class="dim">Crit Rate ${(eff.CRIT_RATE*100).toFixed(1)}% · Crit DMG ${(eff.CRIT_DMG*100).toFixed(1)}% · Dual-Atk ${(eff.DUAL_CHANCE*100).toFixed(1)}% (gear-only, uncapped)</div>`;
+      statsEl.appendChild(crit);
+    }
+
+    const gearEl = document.createElement('div');
+    gearEl.className = 'hub-gear';
+    gearEl.innerHTML = `<div class="hub-gear-title">Gear</div>`;
+    card.appendChild(gearEl);
+    SLOT_ORDER.forEach((slot, idx)=>{
+      const equippedId = rec.gear[idx];
+      const equipped = equippedId ? gearPiece(equippedId) : null;
+      const options = unequippedGearOfSlot(slot);
+      const row = document.createElement('div');
+      row.className = 'hub-gear-row';
+      const desc = equipped
+        ? `<b>${pieceLabel(equipped)}</b><br><span class="dim">${pieceSubstatSummary(equipped)}</span>`
+        : `<span class="dim">— empty —</span>`;
+      let selectHtml = `<select data-slot="${idx}" data-id="${rec.id}"><option value="">— empty —</option>`;
+      if(equipped) selectHtml += `<option value="${equipped.id}" selected>${pieceLabel(equipped)}</option>`;
+      for(const opt of options) selectHtml += `<option value="${opt.id}">${pieceLabel(opt)}</option>`;
+      selectHtml += `</select>`;
+      row.innerHTML = `<div class="gear-slot-name">${SLOT_LABEL[slot]}</div><div class="gear-piece-desc">${desc}</div><div>${selectHtml}</div>`;
+      gearEl.appendChild(row);
+    });
   }
 }
 
@@ -1262,12 +1457,21 @@ document.getElementById('ovBtn').addEventListener('click', ()=>{
 document.getElementById('ovReset').addEventListener('click', ()=>{
   localStorage.removeItem(SAVE_KEY);
   roster = PLAYER_DEFS.map(freshRosterUnit);
+  gearInventory = [];
+  gearIdCounter = 0;
   saveRoster();
   renderRosterOverlay();
   logMsg('Saved progress reset.', 'debuff');
 });
 document.getElementById('ovManageBtn').addEventListener('click', openHub);
 document.getElementById('hubCloseBtn').addEventListener('click', closeHub);
+document.getElementById('hubGenGear').addEventListener('click', ()=>{
+  const slot = SLOT_ORDER[Math.floor(Math.random()*SLOT_ORDER.length)];
+  const roll = Math.random();
+  const rarity = roll<0.45 ? 'C' : roll<0.75 ? 'R' : roll<0.93 ? 'E' : 'L';
+  gearInventory.push(generateGearPiece(slot, rarity));
+  renderHub();
+});
 document.getElementById('hubUnits').addEventListener('click', (e)=>{
   const respecBtn = e.target.closest('.hub-respec');
   if(respecBtn){
@@ -1280,6 +1484,15 @@ document.getElementById('hubUnits').addEventListener('click', (e)=>{
   const rec = rosterFor(btn.closest('.hub-stats').dataset.id);
   if(btn.dataset.act==='spend') spendPoint(rec, btn.dataset.stat);
   else undoPoint(rec, btn.dataset.stat);
+  renderHub();
+});
+document.getElementById('hubUnits').addEventListener('change', (e)=>{
+  const sel = e.target.closest('select[data-slot]');
+  if(!sel) return;
+  const rec = rosterFor(sel.dataset.id);
+  const slotIdx = parseInt(sel.dataset.slot, 10);
+  if(sel.value) equipPiece(rec, slotIdx, sel.value);
+  else unequipSlot(rec, slotIdx);
   renderHub();
 });
 renderRosterOverlay();
