@@ -1,0 +1,1534 @@
+{
+  "_rules": {
+    "version": "0.5",
+    "categories": [
+      "buff",
+      "debuff",
+      "dot",
+      "control",
+      "instant",
+      "special"
+    ],
+    "removal": {
+      "buffs": "removed by STRIP (enemy) unless dispellable=false",
+      "debuffs": "removed by CLEANSE (ally) unless cleansable=false",
+      "dots": "debuff subtype; cleanse removes unless flagged; Doom is uncleansable",
+      "control": "cleansable unless flagged; Enrage family is uncleansable",
+      "instant": "resolves once; nothing to remove"
+    },
+    "stacking": "only stacks=true effects stack (DoTs: Poison/Bleed/Burn/Curse + a few flagged). Non-stacking uses REFRESH-IF-STRONGER: a stronger application overwrites; weaker is ignored; equal refreshes duration.",
+    "duration_models": [
+      "turns",
+      "momentum",
+      "permanent",
+      "instant"
+    ],
+    "undispellable": "any effect may set dispellable=false (buffs) / cleansable=false (debuffs) \u2014 used for Gold permanence, Dark/Doom, and the Enrage family.",
+    "team_wide_rule": "'team-wide' is NOT a separate effect \u2014 it's a target/duration modifier the ABILITY sets. Standard effects (ATK Up, Regen, POT Up, etc.) can be applied single-target OR team-wide; team versions are balanced by shorter duration or by being gated to rarer units. Do not author 'team_x' as its own entry.",
+    "control_ladder": "Action-denial ladder \u2014 each blocks exactly ONE action type: Disarm=no basics, Silence=no skills, Sealed=no ults. Stun=full lockout (all three) + still takes damage. Freeze=lose turn but immune to direct damage (DoTs tick), 1 turn then breaks. Sleep=lose turns + self-heal 20%/turn, breaks on damage.",
+    "enrage_system": "Enrage (Berserk/Frenzy/Overload) is UNCLEANSABLE and TRIGGER-BOUND (hp_threshold/phase/turn_count/on_effect:<id>/manual) \u2014 almost never a cast skill. Enemy-focused; rarely a (double-edged) player buff. Pair with 'prevent_death_team' (Last Line) for the signature un-killable-but-deadly survival window.",
+    "trigger_field": "effects with a 'trigger' key are applied by a CONDITION, not by casting. The combat engine watches for the trigger and applies the effect when it fires.",
+    "value_note": "'X%' values are set per-ability (the skill defines the magnitude); this glossary defines the EFFECT, the kit defines the NUMBER.",
+    "ability_fields": "Conditional damage, hit-shape, and pen live on the ABILITY, not in effects[]: 'hits' (int, multi-hit), 'ignore_def' (0..1 fraction of DEF ignored), 'bonus_vs' ({condition, amount} conditional damage/crit \u2014 the set-up->exploit layer), 'triggers' ([{effect,on}] condition-applied effects using the trigger_field rule). effects[] holds ONLY valid glossary status ids.",
+    "no_instant_death": "Doom (death-on-timer) is REMOVED. Timed pressure uses debuff_bomb: countdown -> debuff payload on expiry, never a guaranteed kill.",
+    "magnitude_schema": "Effects on abilities are objects: {id, mag(%/value), dur(turns), chance(0-1 base apply), stacks}. Magnitude TYPE by effect: PERCENT_STAT (mag=% stat delta), PERCENT_HP (mag=% max HP), DOT (mag=% target HP/tick), MOMENTUM (mag=% gauge), DURATION_ONLY (value from dur+chance), SPECIAL (bespoke: execute=threshold%, etc). atk_up_major/def_break_major/regen_major FOLDED into base id with high mag."
+  },
+  "effects": [
+    {
+      "id": "atk_up",
+      "name": "Attack Up",
+      "category": "buff",
+      "desc": "+X% ATK.",
+      "stacks": false,
+      "max_stacks": 1,
+      "duration_model": "turns",
+      "default_duration": 2,
+      "dispellable": true,
+      "cleansable": true,
+      "tags": [
+        "stat",
+        "offense"
+      ]
+    },
+    {
+      "id": "def_up",
+      "name": "Defense Up",
+      "category": "buff",
+      "desc": "+X% DEF.",
+      "stacks": false,
+      "max_stacks": 1,
+      "duration_model": "turns",
+      "default_duration": 2,
+      "dispellable": true,
+      "cleansable": true,
+      "tags": [
+        "stat",
+        "defense"
+      ]
+    },
+    {
+      "id": "spd_up",
+      "name": "Speed Up",
+      "category": "buff",
+      "desc": "+X% SPD (faster Momentum gain).",
+      "stacks": false,
+      "max_stacks": 1,
+      "duration_model": "turns",
+      "default_duration": 2,
+      "dispellable": true,
+      "cleansable": true,
+      "tags": [
+        "stat",
+        "tempo"
+      ]
+    },
+    {
+      "id": "crit_rate_up",
+      "name": "Crit Rate Up",
+      "category": "buff",
+      "desc": "+X% Crit Rate.",
+      "stacks": false,
+      "max_stacks": 1,
+      "duration_model": "turns",
+      "default_duration": 2,
+      "dispellable": true,
+      "cleansable": true,
+      "tags": [
+        "stat",
+        "offense"
+      ]
+    },
+    {
+      "id": "crit_dmg_up",
+      "name": "Crit Damage Up",
+      "category": "buff",
+      "desc": "+X% Crit Damage.",
+      "stacks": false,
+      "max_stacks": 1,
+      "duration_model": "turns",
+      "default_duration": 2,
+      "dispellable": true,
+      "cleansable": true,
+      "tags": [
+        "stat",
+        "offense"
+      ]
+    },
+    {
+      "id": "pot_up",
+      "name": "Potency Up",
+      "category": "buff",
+      "desc": "+X% Potency (debuffs land harder).",
+      "stacks": false,
+      "max_stacks": 1,
+      "duration_model": "turns",
+      "default_duration": 2,
+      "dispellable": true,
+      "cleansable": true,
+      "tags": [
+        "stat",
+        "control"
+      ]
+    },
+    {
+      "id": "res_up",
+      "name": "Resolve Up",
+      "category": "buff",
+      "desc": "+X% Resolve (resist incoming debuffs).",
+      "stacks": false,
+      "max_stacks": 1,
+      "duration_model": "turns",
+      "default_duration": 2,
+      "dispellable": true,
+      "cleansable": true,
+      "tags": [
+        "stat",
+        "defense"
+      ]
+    },
+    {
+      "id": "regen",
+      "name": "Regeneration",
+      "category": "buff",
+      "desc": "Heal X% max HP at end of each turn.",
+      "stacks": false,
+      "max_stacks": 1,
+      "duration_model": "turns",
+      "default_duration": 2,
+      "dispellable": true,
+      "cleansable": true,
+      "tags": [
+        "heal",
+        "hot"
+      ]
+    },
+    {
+      "id": "shield",
+      "name": "Shield",
+      "category": "buff",
+      "desc": "Absorbs up to X damage, then breaks.",
+      "stacks": false,
+      "max_stacks": 1,
+      "duration_model": "turns",
+      "default_duration": 2,
+      "dispellable": true,
+      "cleansable": true,
+      "tags": [
+        "defense",
+        "absorb"
+      ]
+    },
+    {
+      "id": "shield_unbreakable",
+      "name": "Aegis (Shield)",
+      "category": "special",
+      "desc": "A shield that cannot be bypassed by ignore-DEF/pierce.",
+      "stacks": false,
+      "max_stacks": 1,
+      "duration_model": "turns",
+      "default_duration": 2,
+      "dispellable": false,
+      "cleansable": true,
+      "tags": [
+        "defense",
+        "absorb",
+        "gold"
+      ]
+    },
+    {
+      "id": "damage_reduction",
+      "name": "Damage Reduction",
+      "category": "buff",
+      "desc": "Takes X% less damage from all sources.",
+      "stacks": false,
+      "max_stacks": 1,
+      "duration_model": "turns",
+      "default_duration": 2,
+      "dispellable": true,
+      "cleansable": true,
+      "tags": [
+        "defense"
+      ]
+    },
+    {
+      "id": "dr_unreducible",
+      "name": "Unbending (Damage Reduction)",
+      "category": "special",
+      "desc": "Damage reduction that cannot itself be reduced/ignored.",
+      "stacks": false,
+      "max_stacks": 1,
+      "duration_model": "turns",
+      "default_duration": 2,
+      "dispellable": false,
+      "cleansable": true,
+      "tags": [
+        "defense",
+        "gold"
+      ]
+    },
+    {
+      "id": "reflect",
+      "name": "Reflect",
+      "category": "buff",
+      "desc": "Returns X% of damage taken to the attacker.",
+      "stacks": false,
+      "max_stacks": 1,
+      "duration_model": "turns",
+      "default_duration": 2,
+      "dispellable": true,
+      "cleansable": true,
+      "tags": [
+        "defense",
+        "punish"
+      ]
+    },
+    {
+      "id": "counter",
+      "name": "Counter Stance",
+      "category": "buff",
+      "desc": "Counterattacks the next enemy who strikes this unit.",
+      "stacks": false,
+      "max_stacks": 1,
+      "duration_model": "turns",
+      "default_duration": 2,
+      "dispellable": true,
+      "cleansable": true,
+      "tags": [
+        "punish"
+      ]
+    },
+    {
+      "id": "lifesteal_buff",
+      "name": "Bloodthirst",
+      "category": "buff",
+      "desc": "This unit's damage heals it for X% (temporary).",
+      "stacks": false,
+      "max_stacks": 1,
+      "duration_model": "turns",
+      "default_duration": 2,
+      "dispellable": true,
+      "cleansable": true,
+      "tags": [
+        "heal",
+        "offense"
+      ]
+    },
+    {
+      "id": "debuff_immunity",
+      "name": "Debuff Immunity",
+      "category": "buff",
+      "desc": "Cannot receive new debuffs while active.",
+      "stacks": false,
+      "max_stacks": 1,
+      "duration_model": "turns",
+      "default_duration": 2,
+      "dispellable": true,
+      "cleansable": true,
+      "tags": [
+        "defense",
+        "immunity"
+      ]
+    },
+    {
+      "id": "control_immunity",
+      "name": "Unstoppable",
+      "category": "buff",
+      "desc": "Immune to control (Stun/Freeze/Silence/Disarm/Sealed/Taunt/push).",
+      "stacks": false,
+      "max_stacks": 1,
+      "duration_model": "turns",
+      "default_duration": 2,
+      "dispellable": true,
+      "cleansable": true,
+      "tags": [
+        "defense",
+        "immunity",
+        "tempo"
+      ]
+    },
+    {
+      "id": "death_immunity",
+      "name": "Undying",
+      "category": "buff",
+      "desc": "Cannot drop below 1 HP while active (survives lethal). Dispellable \u2014 enemies can strip it for counterplay.",
+      "stacks": false,
+      "max_stacks": 1,
+      "duration_model": "turns",
+      "default_duration": 2,
+      "dispellable": true,
+      "cleansable": true,
+      "tags": [
+        "defense",
+        "survival"
+      ]
+    },
+    {
+      "id": "cannot_miss_buff",
+      "name": "True Aim",
+      "category": "buff",
+      "desc": "This unit's attacks cannot miss while active.",
+      "stacks": false,
+      "max_stacks": 1,
+      "duration_model": "turns",
+      "default_duration": 2,
+      "dispellable": true,
+      "cleansable": true,
+      "tags": [
+        "offense",
+        "accuracy"
+      ]
+    },
+    {
+      "id": "guaranteed_crit_buff",
+      "name": "Perfect Focus",
+      "category": "buff",
+      "desc": "This unit's next X hits are guaranteed crits.",
+      "stacks": true,
+      "max_stacks": 3,
+      "duration_model": "turns",
+      "default_duration": 2,
+      "dispellable": true,
+      "cleansable": true,
+      "tags": [
+        "offense"
+      ]
+    },
+    {
+      "id": "dodge_up",
+      "name": "Evasion Up",
+      "category": "buff",
+      "desc": "+X% chance to dodge incoming attacks.",
+      "stacks": false,
+      "max_stacks": 1,
+      "duration_model": "turns",
+      "default_duration": 2,
+      "dispellable": true,
+      "cleansable": true,
+      "tags": [
+        "defense"
+      ]
+    },
+    {
+      "id": "taunt_self",
+      "name": "Provoke (self)",
+      "category": "buff",
+      "desc": "Forces enemies to target this unit.",
+      "stacks": false,
+      "max_stacks": 1,
+      "duration_model": "turns",
+      "default_duration": 2,
+      "dispellable": true,
+      "cleansable": true,
+      "tags": [
+        "tank",
+        "aggro"
+      ]
+    },
+    {
+      "id": "stealth",
+      "name": "Veil",
+      "category": "buff",
+      "desc": "Cannot be targeted by single-target attacks (until it acts / X turns).",
+      "stacks": false,
+      "max_stacks": 1,
+      "duration_model": "turns",
+      "default_duration": 2,
+      "dispellable": true,
+      "cleansable": true,
+      "tags": [
+        "defense",
+        "tempo"
+      ]
+    },
+    {
+      "id": "momentum_immunity",
+      "name": "Rooted",
+      "category": "buff",
+      "desc": "Immune to enemy Momentum push/pull.",
+      "stacks": false,
+      "max_stacks": 1,
+      "duration_model": "turns",
+      "default_duration": 2,
+      "dispellable": true,
+      "cleansable": true,
+      "tags": [
+        "tempo",
+        "immunity"
+      ]
+    },
+    {
+      "id": "buff_undispellable",
+      "name": "Sovereign Ward",
+      "category": "special",
+      "desc": "This unit's buffs cannot be stripped by enemies.",
+      "stacks": false,
+      "max_stacks": 1,
+      "duration_model": "turns",
+      "default_duration": 2,
+      "dispellable": false,
+      "cleansable": true,
+      "tags": [
+        "gold",
+        "command"
+      ]
+    },
+    {
+      "id": "aura_all_stats",
+      "name": "Coronation Aura",
+      "category": "special",
+      "desc": "+X% to all core stats; unremovable while active.",
+      "stacks": false,
+      "max_stacks": 1,
+      "duration_model": "turns",
+      "default_duration": 2,
+      "dispellable": false,
+      "cleansable": true,
+      "tags": [
+        "gold",
+        "command"
+      ]
+    },
+    {
+      "id": "permanent_buff_flag",
+      "name": "Decree",
+      "category": "special",
+      "desc": "Marks the attached stat buff as non-expiring (permanent until dispelled).",
+      "stacks": false,
+      "max_stacks": 1,
+      "duration_model": "turns",
+      "default_duration": 2,
+      "dispellable": true,
+      "cleansable": true,
+      "tags": [
+        "gold",
+        "command"
+      ]
+    },
+    {
+      "id": "atk_down",
+      "name": "Attack Down",
+      "category": "debuff",
+      "desc": "-X% ATK.",
+      "stacks": false,
+      "max_stacks": 1,
+      "duration_model": "turns",
+      "default_duration": 2,
+      "dispellable": true,
+      "cleansable": true,
+      "tags": [
+        "stat",
+        "offense"
+      ]
+    },
+    {
+      "id": "def_break",
+      "name": "Defense Break",
+      "category": "debuff",
+      "desc": "-X% DEF.",
+      "stacks": false,
+      "max_stacks": 1,
+      "duration_model": "turns",
+      "default_duration": 2,
+      "dispellable": true,
+      "cleansable": true,
+      "tags": [
+        "stat",
+        "defense"
+      ]
+    },
+    {
+      "id": "spd_down",
+      "name": "Slow",
+      "category": "debuff",
+      "desc": "-X% SPD (slower Momentum gain).",
+      "stacks": false,
+      "max_stacks": 1,
+      "duration_model": "turns",
+      "default_duration": 2,
+      "dispellable": true,
+      "cleansable": true,
+      "tags": [
+        "stat",
+        "tempo"
+      ]
+    },
+    {
+      "id": "crit_rate_down",
+      "name": "Crit Rate Down",
+      "category": "debuff",
+      "desc": "-X% Crit Rate.",
+      "stacks": false,
+      "max_stacks": 1,
+      "duration_model": "turns",
+      "default_duration": 2,
+      "dispellable": true,
+      "cleansable": true,
+      "tags": [
+        "stat"
+      ]
+    },
+    {
+      "id": "pot_down",
+      "name": "Potency Down",
+      "category": "debuff",
+      "desc": "-X% Potency (their debuffs fail more).",
+      "stacks": false,
+      "max_stacks": 1,
+      "duration_model": "turns",
+      "default_duration": 2,
+      "dispellable": true,
+      "cleansable": true,
+      "tags": [
+        "stat",
+        "control"
+      ]
+    },
+    {
+      "id": "res_down",
+      "name": "Resolve Down",
+      "category": "debuff",
+      "desc": "-X% Resolve (easier to debuff).",
+      "stacks": false,
+      "max_stacks": 1,
+      "duration_model": "turns",
+      "default_duration": 2,
+      "dispellable": true,
+      "cleansable": true,
+      "tags": [
+        "stat",
+        "control"
+      ]
+    },
+    {
+      "id": "brand",
+      "name": "Brand",
+      "category": "debuff",
+      "desc": "Target takes +X% damage from ALL sources.",
+      "stacks": false,
+      "max_stacks": 1,
+      "duration_model": "turns",
+      "default_duration": 2,
+      "dispellable": true,
+      "cleansable": true,
+      "tags": [
+        "amplify",
+        "offense"
+      ]
+    },
+    {
+      "id": "anti_heal",
+      "name": "Anti-Heal",
+      "category": "debuff",
+      "desc": "Healing received reduced by X% (up to 100%).",
+      "stacks": false,
+      "max_stacks": 1,
+      "duration_model": "turns",
+      "default_duration": 2,
+      "dispellable": true,
+      "cleansable": true,
+      "tags": [
+        "control",
+        "sustain-denial"
+      ]
+    },
+    {
+      "id": "accuracy_down",
+      "name": "Blind",
+      "category": "debuff",
+      "desc": "This unit's attacks have an X% chance to miss.",
+      "stacks": false,
+      "max_stacks": 1,
+      "duration_model": "turns",
+      "default_duration": 2,
+      "dispellable": true,
+      "cleansable": true,
+      "tags": [
+        "control",
+        "accuracy"
+      ]
+    },
+    {
+      "id": "healing_block",
+      "name": "Heal Block",
+      "category": "debuff",
+      "desc": "Cannot be healed at all while active.",
+      "stacks": false,
+      "max_stacks": 1,
+      "duration_model": "turns",
+      "default_duration": 2,
+      "dispellable": true,
+      "cleansable": true,
+      "tags": [
+        "control",
+        "sustain-denial"
+      ]
+    },
+    {
+      "id": "buff_block",
+      "name": "Null",
+      "category": "debuff",
+      "desc": "Cannot receive new buffs while active.",
+      "stacks": false,
+      "max_stacks": 1,
+      "duration_model": "turns",
+      "default_duration": 2,
+      "dispellable": true,
+      "cleansable": true,
+      "tags": [
+        "control"
+      ]
+    },
+    {
+      "id": "damage_taken_up",
+      "name": "Exposed",
+      "category": "debuff",
+      "desc": "Takes +X% damage from a marked source/team.",
+      "stacks": false,
+      "max_stacks": 1,
+      "duration_model": "turns",
+      "default_duration": 2,
+      "dispellable": true,
+      "cleansable": true,
+      "tags": [
+        "amplify"
+      ]
+    },
+    {
+      "id": "shield_block",
+      "name": "Shatterproof",
+      "category": "debuff",
+      "desc": "Cannot gain new shields while active.",
+      "stacks": false,
+      "max_stacks": 1,
+      "duration_model": "turns",
+      "default_duration": 2,
+      "dispellable": true,
+      "cleansable": true,
+      "tags": [
+        "control"
+      ]
+    },
+    {
+      "id": "marked",
+      "name": "Marked",
+      "category": "debuff",
+      "desc": "Team deals +X% to this target; enables 'exploit' effects.",
+      "stacks": false,
+      "max_stacks": 1,
+      "duration_model": "turns",
+      "default_duration": 2,
+      "dispellable": true,
+      "cleansable": true,
+      "tags": [
+        "amplify",
+        "synergy"
+      ]
+    },
+    {
+      "id": "momentum_slow_field",
+      "name": "Dampened",
+      "category": "debuff",
+      "desc": "Gains Momentum X% slower.",
+      "stacks": false,
+      "max_stacks": 1,
+      "duration_model": "turns",
+      "default_duration": 2,
+      "dispellable": true,
+      "cleansable": true,
+      "tags": [
+        "tempo",
+        "control"
+      ]
+    },
+    {
+      "id": "vulnerable_element",
+      "name": "Sundered Affinity",
+      "category": "debuff",
+      "desc": "Loses affinity advantage / takes affinity disadvantage.",
+      "stacks": false,
+      "max_stacks": 1,
+      "duration_model": "turns",
+      "default_duration": 2,
+      "dispellable": true,
+      "cleansable": true,
+      "tags": [
+        "amplify",
+        "affinity"
+      ]
+    },
+    {
+      "id": "poison",
+      "name": "Poison",
+      "category": "dot",
+      "desc": "Deals X% of target max HP as damage each turn. Stacks.",
+      "stacks": true,
+      "max_stacks": 10,
+      "duration_model": "turns",
+      "default_duration": 2,
+      "dispellable": true,
+      "cleansable": true,
+      "tags": [
+        "dot",
+        "green",
+        "dark"
+      ]
+    },
+    {
+      "id": "bleed",
+      "name": "Bleed",
+      "category": "dot",
+      "desc": "Deals flat X damage each turn, scales w/ caster ATK. Stacks.",
+      "stacks": true,
+      "max_stacks": 10,
+      "duration_model": "turns",
+      "default_duration": 2,
+      "dispellable": true,
+      "cleansable": true,
+      "tags": [
+        "dot"
+      ]
+    },
+    {
+      "id": "burn",
+      "name": "Burn",
+      "category": "dot",
+      "desc": "Deals X damage each turn; bonus vs low-DEF. Stacks. NOTE: damage-calc method flagged for a future tweak.",
+      "stacks": true,
+      "max_stacks": 5,
+      "duration_model": "turns",
+      "default_duration": 2,
+      "dispellable": true,
+      "cleansable": true,
+      "tags": [
+        "dot",
+        "red",
+        "revisit"
+      ]
+    },
+    {
+      "id": "curse",
+      "name": "Curse",
+      "category": "dot",
+      "desc": "Damage each turn that INCREASES the longer it remains. Stacks.",
+      "stacks": true,
+      "max_stacks": 5,
+      "duration_model": "turns",
+      "default_duration": 2,
+      "dispellable": true,
+      "cleansable": true,
+      "tags": [
+        "dot",
+        "dark"
+      ]
+    },
+    {
+      "id": "stun",
+      "name": "Stun",
+      "category": "control",
+      "desc": "FULL LOCKOUT: skips the turn entirely AND still takes damage normally. The offensive control \u2014 lock them and burst them.",
+      "stacks": false,
+      "max_stacks": 1,
+      "duration_model": "turns",
+      "default_duration": 1,
+      "dispellable": true,
+      "cleansable": true,
+      "tags": [
+        "hardcc"
+      ]
+    },
+    {
+      "id": "freeze",
+      "name": "Freeze",
+      "category": "control",
+      "desc": "Loses its turn when Momentum fills, BUT is immune to DIRECT damage while frozen (DoTs still tick). Costs ONE turn, then breaks. Defensive/stall control \u2014 you can't burst a frozen enemy, so freezing a low-HP target actually protects it.",
+      "stacks": false,
+      "max_stacks": 1,
+      "duration_model": "turns",
+      "default_duration": 1,
+      "dispellable": true,
+      "cleansable": true,
+      "tags": [
+        "hardcc",
+        "stall"
+      ]
+    },
+    {
+      "id": "silence",
+      "name": "Silence",
+      "category": "control",
+      "desc": "Cannot use SKILLS (basic attacks & ults still usable).",
+      "stacks": false,
+      "max_stacks": 1,
+      "duration_model": "turns",
+      "default_duration": 2,
+      "dispellable": true,
+      "cleansable": true,
+      "tags": [
+        "softcc",
+        "ladder"
+      ]
+    },
+    {
+      "id": "disarm",
+      "name": "Disarm",
+      "category": "control",
+      "desc": "Cannot use BASIC ATTACKS (skills & ults still usable). Value spikes when the enemy's skills/ults are on cooldown \u2014 then they have nothing to do and lose the turn.",
+      "stacks": false,
+      "max_stacks": 1,
+      "duration_model": "turns",
+      "default_duration": 2,
+      "dispellable": true,
+      "cleansable": true,
+      "tags": [
+        "softcc",
+        "ladder"
+      ]
+    },
+    {
+      "id": "taunt",
+      "name": "Taunt",
+      "category": "control",
+      "desc": "Forced to target the taunting unit.",
+      "stacks": false,
+      "max_stacks": 1,
+      "duration_model": "turns",
+      "default_duration": 2,
+      "dispellable": true,
+      "cleansable": true,
+      "tags": [
+        "aggro"
+      ]
+    },
+    {
+      "id": "provoke_all",
+      "name": "Mass Taunt",
+      "category": "control",
+      "desc": "All affected enemies forced to target the caster.",
+      "stacks": false,
+      "max_stacks": 1,
+      "duration_model": "turns",
+      "default_duration": 2,
+      "dispellable": true,
+      "cleansable": true,
+      "tags": [
+        "aggro"
+      ]
+    },
+    {
+      "id": "sleep",
+      "name": "Sleep",
+      "category": "control",
+      "desc": "Skips turns AND heals 20% max HP per turn; breaks on damage taken. Double-edged risk control \u2014 you gift HP for tempo, and the enemy may even want to keep it.",
+      "stacks": false,
+      "max_stacks": 1,
+      "duration_model": "turns",
+      "default_duration": 2,
+      "dispellable": true,
+      "cleansable": true,
+      "tags": [
+        "hardcc",
+        "risk"
+      ]
+    },
+    {
+      "id": "ult_lock",
+      "name": "Sealed",
+      "category": "control",
+      "desc": "Cannot use ULTS (basic attacks & skills still usable). Third rung of the action-denial ladder.",
+      "stacks": false,
+      "max_stacks": 1,
+      "duration_model": "turns",
+      "default_duration": 2,
+      "dispellable": true,
+      "cleansable": true,
+      "tags": [
+        "softcc",
+        "ladder"
+      ]
+    },
+    {
+      "id": "heal",
+      "name": "Heal",
+      "category": "instant",
+      "desc": "Restore X% of target max HP (or flat).",
+      "stacks": false,
+      "max_stacks": 1,
+      "duration_model": "instant",
+      "default_duration": 2,
+      "dispellable": true,
+      "cleansable": true,
+      "tags": [
+        "heal"
+      ]
+    },
+    {
+      "id": "heal_team",
+      "name": "Team Heal",
+      "category": "instant",
+      "desc": "Heal all allies.",
+      "stacks": false,
+      "max_stacks": 1,
+      "duration_model": "instant",
+      "default_duration": 2,
+      "dispellable": true,
+      "cleansable": true,
+      "tags": [
+        "heal"
+      ]
+    },
+    {
+      "id": "revive",
+      "name": "Revive",
+      "category": "instant",
+      "desc": "Bring a fallen ally back at X% HP.",
+      "stacks": false,
+      "max_stacks": 1,
+      "duration_model": "instant",
+      "default_duration": 2,
+      "dispellable": true,
+      "cleansable": true,
+      "tags": [
+        "heal",
+        "survival"
+      ]
+    },
+    {
+      "id": "cleanse",
+      "name": "Cleanse",
+      "category": "instant",
+      "desc": "Remove X debuffs from a target (skips uncleansable).",
+      "stacks": false,
+      "max_stacks": 1,
+      "duration_model": "instant",
+      "default_duration": 2,
+      "dispellable": true,
+      "cleansable": true,
+      "tags": [
+        "support"
+      ]
+    },
+    {
+      "id": "cleanse_all",
+      "name": "Mass Cleanse",
+      "category": "instant",
+      "desc": "Remove all cleansable debuffs from the team.",
+      "stacks": false,
+      "max_stacks": 1,
+      "duration_model": "instant",
+      "default_duration": 2,
+      "dispellable": true,
+      "cleansable": true,
+      "tags": [
+        "support"
+      ]
+    },
+    {
+      "id": "strip",
+      "name": "Strip",
+      "category": "instant",
+      "desc": "Remove X buffs from ONE enemy (skips undispellable).",
+      "stacks": false,
+      "max_stacks": 1,
+      "duration_model": "instant",
+      "default_duration": 2,
+      "dispellable": true,
+      "cleansable": true,
+      "tags": [
+        "control"
+      ]
+    },
+    {
+      "id": "strip_multi",
+      "name": "Strip (Multi)",
+      "category": "instant",
+      "desc": "Remove X buffs from MULTIPLE enemies (not a full wipe \u2014 X per target, skips undispellable).",
+      "stacks": false,
+      "max_stacks": 1,
+      "duration_model": "instant",
+      "default_duration": 2,
+      "dispellable": true,
+      "cleansable": true,
+      "tags": [
+        "control"
+      ]
+    },
+    {
+      "id": "momentum_push",
+      "name": "Momentum Push",
+      "category": "instant",
+      "desc": "Reduce target's Momentum gauge by X%.",
+      "stacks": false,
+      "max_stacks": 1,
+      "duration_model": "instant",
+      "default_duration": 2,
+      "dispellable": true,
+      "cleansable": true,
+      "tags": [
+        "tempo"
+      ]
+    },
+    {
+      "id": "momentum_pull",
+      "name": "Momentum Pull",
+      "category": "instant",
+      "desc": "Increase an ally's Momentum gauge by X%.",
+      "stacks": false,
+      "max_stacks": 1,
+      "duration_model": "instant",
+      "default_duration": 2,
+      "dispellable": true,
+      "cleansable": true,
+      "tags": [
+        "tempo"
+      ]
+    },
+    {
+      "id": "momentum_steal",
+      "name": "Momentum Steal",
+      "category": "instant",
+      "desc": "Take X% Momentum from an enemy, give to an ally.",
+      "stacks": false,
+      "max_stacks": 1,
+      "duration_model": "instant",
+      "default_duration": 2,
+      "dispellable": true,
+      "cleansable": true,
+      "tags": [
+        "tempo"
+      ]
+    },
+    {
+      "id": "extra_action",
+      "name": "Extra Action",
+      "category": "instant",
+      "desc": "Target immediately gains an extra turn.",
+      "stacks": false,
+      "max_stacks": 1,
+      "duration_model": "instant",
+      "default_duration": 2,
+      "dispellable": true,
+      "cleansable": true,
+      "tags": [
+        "tempo"
+      ]
+    },
+    {
+      "id": "cooldown_reduction",
+      "name": "Hasten",
+      "category": "instant",
+      "desc": "Reduce an ally's cooldowns by X turns.",
+      "stacks": false,
+      "max_stacks": 1,
+      "duration_model": "instant",
+      "default_duration": 2,
+      "dispellable": true,
+      "cleansable": true,
+      "tags": [
+        "support",
+        "tempo"
+      ]
+    },
+    {
+      "id": "cooldown_refund",
+      "name": "Refund",
+      "category": "instant",
+      "desc": "Refund this unit's cooldown (often on kill).",
+      "stacks": false,
+      "max_stacks": 1,
+      "duration_model": "instant",
+      "default_duration": 2,
+      "dispellable": true,
+      "cleansable": true,
+      "tags": [
+        "tempo"
+      ]
+    },
+    {
+      "id": "dispel_self_debuffs",
+      "name": "Shrug Off",
+      "category": "instant",
+      "desc": "This unit removes debuffs from itself.",
+      "stacks": false,
+      "max_stacks": 1,
+      "duration_model": "instant",
+      "default_duration": 2,
+      "dispellable": true,
+      "cleansable": true,
+      "tags": [
+        "support"
+      ]
+    },
+    {
+      "id": "detonate_dot",
+      "name": "Detonate",
+      "category": "instant",
+      "desc": "Consume all DoT stacks on a target for burst damage.",
+      "stacks": false,
+      "max_stacks": 1,
+      "duration_model": "instant",
+      "default_duration": 2,
+      "dispellable": true,
+      "cleansable": true,
+      "tags": [
+        "dot",
+        "burst"
+      ]
+    },
+    {
+      "id": "execute",
+      "name": "Execute",
+      "category": "instant",
+      "desc": "Instantly kill a target below X% HP.",
+      "stacks": false,
+      "max_stacks": 1,
+      "duration_model": "instant",
+      "default_duration": 2,
+      "dispellable": true,
+      "cleansable": true,
+      "tags": [
+        "burst"
+      ]
+    },
+    {
+      "id": "knockback_momentum",
+      "name": "Setback",
+      "category": "instant",
+      "desc": "Push target to the back of the turn order.",
+      "stacks": false,
+      "max_stacks": 1,
+      "duration_model": "instant",
+      "default_duration": 2,
+      "dispellable": true,
+      "cleansable": true,
+      "tags": [
+        "tempo"
+      ]
+    },
+    {
+      "id": "hp_cost",
+      "name": "Blood Price",
+      "category": "special",
+      "desc": "Caster spends X% HP to power an effect.",
+      "stacks": false,
+      "max_stacks": 1,
+      "duration_model": "instant",
+      "default_duration": 2,
+      "dispellable": true,
+      "cleansable": true,
+      "tags": [
+        "dark",
+        "cost"
+      ]
+    },
+    {
+      "id": "shared_hp_pool",
+      "name": "Blood Bond",
+      "category": "special",
+      "desc": "Allies share one HP pool for the duration (damage spread).",
+      "stacks": false,
+      "max_stacks": 1,
+      "duration_model": "turns",
+      "default_duration": 2,
+      "dispellable": true,
+      "cleansable": true,
+      "tags": [
+        "dark",
+        "defense"
+      ]
+    },
+    {
+      "id": "stacking_scaler",
+      "name": "Ramp",
+      "category": "special",
+      "desc": "A stat/effect that grows each turn or each use (per-unit defined).",
+      "stacks": true,
+      "max_stacks": 99,
+      "duration_model": "turns",
+      "default_duration": 2,
+      "dispellable": false,
+      "cleansable": true,
+      "tags": [
+        "scaling"
+      ]
+    },
+    {
+      "id": "scale_inverse_hp",
+      "name": "Last Stand",
+      "category": "special",
+      "desc": "Effect strengthens the lower the unit's own HP.",
+      "stacks": false,
+      "max_stacks": 1,
+      "duration_model": "turns",
+      "default_duration": 2,
+      "dispellable": false,
+      "cleansable": true,
+      "tags": [
+        "scaling",
+        "survival"
+      ]
+    },
+    {
+      "id": "scale_with_damage_taken",
+      "name": "Retribution",
+      "category": "special",
+      "desc": "Stored damage taken converts into output on a trigger.",
+      "stacks": false,
+      "max_stacks": 1,
+      "duration_model": "turns",
+      "default_duration": 2,
+      "dispellable": false,
+      "cleansable": true,
+      "tags": [
+        "scaling",
+        "punish"
+      ]
+    },
+    {
+      "id": "randomized_effect",
+      "name": "Wild Magic",
+      "category": "special",
+      "desc": "Outcome is randomized within a defined band (the gamble).",
+      "stacks": false,
+      "max_stacks": 1,
+      "duration_model": "instant",
+      "default_duration": 2,
+      "dispellable": true,
+      "cleansable": true,
+      "tags": [
+        "dark",
+        "variance"
+      ]
+    },
+    {
+      "id": "delayed_charge",
+      "name": "Charge",
+      "category": "special",
+      "desc": "Plants a charge that detonates on a later turn.",
+      "stacks": false,
+      "max_stacks": 1,
+      "duration_model": "turns",
+      "default_duration": 1,
+      "dispellable": true,
+      "cleansable": true,
+      "tags": [
+        "setup",
+        "burst"
+      ]
+    },
+    {
+      "id": "threat_mod",
+      "name": "Threat",
+      "category": "special",
+      "desc": "Alters how much aggro this unit generates (up or down).",
+      "stacks": false,
+      "max_stacks": 1,
+      "duration_model": "turns",
+      "default_duration": 2,
+      "dispellable": true,
+      "cleansable": true,
+      "tags": [
+        "tank",
+        "aggro"
+      ]
+    },
+    {
+      "id": "absorb_ally_debuffs",
+      "name": "Martyr",
+      "category": "special",
+      "desc": "Pulls debuffs off allies onto this unit; may gain from holding them.",
+      "stacks": false,
+      "max_stacks": 1,
+      "duration_model": "instant",
+      "default_duration": 2,
+      "dispellable": true,
+      "cleansable": true,
+      "tags": [
+        "support",
+        "dark"
+      ]
+    },
+    {
+      "id": "prevent_death_team",
+      "name": "Last Line",
+      "category": "special",
+      "desc": "Team cannot drop below 1 HP for the duration.",
+      "stacks": false,
+      "max_stacks": 1,
+      "duration_model": "turns",
+      "default_duration": 2,
+      "dispellable": false,
+      "cleansable": true,
+      "tags": [
+        "survival",
+        "gold"
+      ]
+    },
+    {
+      "id": "damage_cap",
+      "name": "Immutable",
+      "category": "special",
+      "desc": "Caps damage taken per hit at X% of max HP (anti-burst).",
+      "stacks": false,
+      "max_stacks": 1,
+      "duration_model": "turns",
+      "default_duration": 2,
+      "dispellable": false,
+      "cleansable": true,
+      "tags": [
+        "gold",
+        "defense"
+      ]
+    },
+    {
+      "id": "unresistable",
+      "name": "Unresistable",
+      "category": "special",
+      "desc": "Flags an effect to ignore the Potency/Resolve contest (always lands).",
+      "stacks": false,
+      "max_stacks": 1,
+      "duration_model": "instant",
+      "default_duration": 2,
+      "dispellable": true,
+      "cleansable": true,
+      "tags": [
+        "gold",
+        "dark",
+        "control"
+      ]
+    },
+    {
+      "id": "team_damage_heals",
+      "name": "Crimson Bond",
+      "category": "special",
+      "desc": "All damage this unit deals also heals the team X%. (Was a buff; promoted to signature-tier special.)",
+      "stacks": false,
+      "max_stacks": 1,
+      "duration_model": "turns",
+      "default_duration": 2,
+      "dispellable": true,
+      "cleansable": true,
+      "tags": [
+        "heal",
+        "offense",
+        "red",
+        "signature"
+      ]
+    },
+    {
+      "id": "wasting",
+      "name": "Wasting",
+      "category": "special",
+      "desc": "Target loses X% max HP each turn AND -healing received. (Special debuff \u2014 a %maxHP DoT fused with sustain-denial.)",
+      "stacks": false,
+      "max_stacks": 1,
+      "duration_model": "turns",
+      "default_duration": 2,
+      "dispellable": true,
+      "cleansable": true,
+      "tags": [
+        "dark",
+        "dot",
+        "sustain-denial"
+      ]
+    },
+    {
+      "id": "shared_agony",
+      "name": "Shared Agony",
+      "category": "special",
+      "desc": "While active on an ally, enemies that damage them take reflected curse damage. (Special debuff/reflect hybrid.)",
+      "stacks": false,
+      "max_stacks": 1,
+      "duration_model": "turns",
+      "default_duration": 2,
+      "dispellable": true,
+      "cleansable": true,
+      "tags": [
+        "dark",
+        "punish",
+        "reflect"
+      ]
+    },
+    {
+      "id": "spread_dot",
+      "name": "DoT-Spread",
+      "category": "special",
+      "desc": "Copy a target's DoTs (Poison/Bleed/Burn/Curse) to all enemies.",
+      "stacks": false,
+      "max_stacks": 1,
+      "duration_model": "instant",
+      "default_duration": 2,
+      "dispellable": true,
+      "cleansable": true,
+      "tags": [
+        "dot",
+        "green",
+        "dark"
+      ]
+    },
+    {
+      "id": "spread_debuff",
+      "name": "Debuff-Spread",
+      "category": "special",
+      "desc": "Copy ANY of a target's debuffs (incl. control & stat-downs) to all enemies. Rarer & stronger than DoT-Spread.",
+      "stacks": false,
+      "max_stacks": 1,
+      "duration_model": "instant",
+      "default_duration": 2,
+      "dispellable": true,
+      "cleansable": true,
+      "tags": [
+        "control",
+        "rare"
+      ]
+    },
+    {
+      "id": "enrage_berserk",
+      "name": "Berserk (Enrage)",
+      "category": "special",
+      "desc": "+big ATK, but takes more damage. Glass-cannon rage \u2014 you CAN race it down, but every hit it lands is brutal.",
+      "stacks": false,
+      "max_stacks": 1,
+      "duration_model": "turns",
+      "default_duration": 2,
+      "dispellable": false,
+      "cleansable": false,
+      "tags": [
+        "enrage",
+        "enemy",
+        "survival"
+      ],
+      "trigger": "hp_threshold"
+    },
+    {
+      "id": "enrage_frenzy",
+      "name": "Frenzy (Enrage)",
+      "category": "special",
+      "desc": "Extra actions / Momentum surge \u2014 the enemy acts far more often. The scramble is TEMPO: it takes several turns to your one.",
+      "stacks": false,
+      "max_stacks": 1,
+      "duration_model": "turns",
+      "default_duration": 2,
+      "dispellable": false,
+      "cleansable": false,
+      "tags": [
+        "enrage",
+        "enemy",
+        "survival",
+        "tempo"
+      ],
+      "trigger": "phase"
+    },
+    {
+      "id": "enrage_overload",
+      "name": "Overload (Enrage)",
+      "category": "special",
+      "desc": "Ultimates come off cooldown / can be re-used repeatedly. The scramble is BURST: big hits keep landing.",
+      "stacks": false,
+      "max_stacks": 1,
+      "duration_model": "turns",
+      "default_duration": 2,
+      "dispellable": false,
+      "cleansable": false,
+      "tags": [
+        "enrage",
+        "enemy",
+        "survival"
+      ],
+      "trigger": "turn_count"
+    },
+    {
+      "id": "dot_amp",
+      "name": "DoT Amplify",
+      "category": "debuff",
+      "desc": "Target takes +X% damage from all damage-over-time effects (Poison/Bleed/Burn/Curse). Set per-ability.",
+      "stacks": false,
+      "max_stacks": 1,
+      "duration_model": "turns",
+      "default_duration": 2,
+      "dispellable": false,
+      "cleansable": true,
+      "tags": [
+        "dot",
+        "amplify",
+        "synergy"
+      ]
+    },
+    {
+      "id": "debuff_bomb",
+      "name": "Debuff Bomb",
+      "category": "special",
+      "desc": "A timed marker that ticks down over N turns (visible counter). On expiry it does NOT kill \u2014 it detonates, applying a payload of debuffs defined by the ability. Removing the marker before detonation (cleanse, if cleansable) defuses it. The bomb-planter's kit sets the countdown and payload.",
+      "stacks": false,
+      "max_stacks": 1,
+      "duration_model": "turns",
+      "default_duration": 3,
+      "dispellable": false,
+      "cleansable": true,
+      "tags": [
+        "timed",
+        "payload",
+        "control"
+      ]
+    }
+  ]
+}
