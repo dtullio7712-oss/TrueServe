@@ -1043,6 +1043,13 @@ function ingest(roster, effects){
 }
 async function boot(){
   const msg = $('#bootmsg');
+  // Standalone builds (tools/build_standalone.py) inline the data spine here,
+  // so the file works from file:// with no server and no sibling files.
+  if(window.__TRUESERVE_DATA){
+    const d = window.__TRUESERVE_DATA;
+    msg.textContent = `loaded ${d.roster.units.length} units, ${d.effects.effects.length} effects (embedded)`;
+    return ingest(d.roster, d.effects);
+  }
   try{
     const [r,e] = await Promise.all([
       fetch('../data/roster.json').then(x=>{if(!x.ok)throw 0;return x.json()}),

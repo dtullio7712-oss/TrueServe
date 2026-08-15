@@ -15,8 +15,9 @@ PROJECT_CONTROL.md   session control — open first
 CLAUDE.md            orientation + locked rules for Claude Code
 data/                the canonical data spine
 docs/                design docs & specs
-prototype/           the playable browser build
+prototype/           the playable browser builds
 sim/                 balance harness + power model
+tools/               build scripts
 ```
 
 ### `data/` — the data spine
@@ -77,6 +78,26 @@ playable steps rather than starting a new project (`docs/progression_prototype_h
 Tunable constants live at the top of the `<script>` block — `TUNING` for combat/XP dials, `ALLOC`
 for allocation growth, and the gear config block for substat ranges, rarity tiers, and the budget
 cap. Tune by feel, per the spec's playtest discipline.
+
+`playtest_build.html` is the **Story/Grind playtest**: summon 30 → pick a team of 4 from the full
+100-unit roster → main menu → a board of 5 dungeons → a 3–9 fight run with HP and cooldowns carrying
+→ an RNG'd sub-boss → win/lose. Manual control with 1×/2×/4× speed. It reads the data spine, so it
+needs a server:
+
+```bash
+python3 -m http.server 8000          # from the repo root
+# open localhost:8000/prototype/playtest_build.html
+```
+
+**To play it on another machine**, bake a single self-contained file instead — no server, no other
+files, just double-click it:
+
+```bash
+python3 tools/build_standalone.py    # → prototype/playtest_standalone.html (~0.22 MB)
+```
+
+That output is **generated** — edit `playtest_build.html` and re-run the script, never edit the
+standalone by hand.
 
 `dungeon_select_mock.jsx` is a React mock of the 5-dungeon selection screen — a feel reference, not
 production code.
