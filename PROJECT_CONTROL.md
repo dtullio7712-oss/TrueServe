@@ -59,6 +59,7 @@ A **single-player, top-down 2D** game fusing:
 | 10 | `encounter_sim.py` | ✅ | Run simulator / **regression harness** — full run (3–9 fights → sub-boss), HP+CD attrition |
 | 11 | `SIM_RESULTS.md` | ✅ | Sim findings: healing flattens HP-attrition; difficulty = kit design; enrage-boss HP finding |
 | 12 | `dungeon_select_mock.jsx` | ✅ | Interactive mockup of the 5-dungeon selection screen (feel reference) |
+| 13 | `progression_prototype_handoff.md` | ✅ ready → 🔨 Steps 1–3 built | Build brief for extending the combat prototype with progression, in ordered steps |
 | … | (economy, bridge, town, summon) | ⬜ later | One spec at a time, in build order |
 
 ---
@@ -127,7 +128,7 @@ A **single-player, top-down 2D** game fusing:
 - Permadeath reconciliation (likely: overworld body can fall, roster persists).
 - Economy currencies & the multi-system wealth spine.
 - Rewards/ranking wrapper for lite-PvP without FOMO.
-- **Step 2 allocation math** (`POINT_PCT` values) — Claude Code was mid-build, awaiting a sanity-check on the derived numbers. Still open on the build side.
+- ~~**Step 2 allocation math** (`POINT_PCT` values)~~ — **RESOLVED on the build side.** The derived numbers were confirmed and wired in; see BUILD STATE below. (This entry was stale: the session-side doc didn't know the build had advanced.)
 
 ---
 
@@ -152,6 +153,44 @@ A **single-player, top-down 2D** game fusing:
 Encounter design opened: `ENCOUNTERS.md` (14-type menu, Phase 0) and `encounter_BOSS_archetype_flip.md` ("The Warden of Ash", a worked 2-phase-boss example, flagged premature — reference only, do not build more bespoke bosses). Two-axis principle: difficulty tier (vertical) × archetype-question (horizontal). Before that: the v0.3 roster ability audit (all 100 kits on the glossary, 3 designed passives each, off-wheel Legendary premium). Build side: persistence done; Step 2 `POINT_PCT` math paused.
 
 </details>
+
+## BUILD STATE — what actually exists in `prototype/combat_prototype.html`
+
+> **Recovered during the repo sync.** The design side of this file had Step 2 logged as "mid-build,
+> awaiting a sanity-check." It wasn't — the build branch had gone two steps further. Design docs flow
+> project → repo; **build state flows repo → project**, and this section is that direction's record.
+> Source: `progression_prototype_handoff.md` + the build branch's commit history.
+
+The prototype is a single self-contained HTML file (~1500 lines) that now carries the combat slice
+**plus** the first three progression steps. Verified by headless-browser playthrough at each step.
+
+- ✅ **Step 1 — Persistence.** Per-unit records (level, xp, unspentPoints, allocatedPoints, gear[6],
+  baseStats, currentHP) in `localStorage`. HP and XP/level carry battle-to-battle and survive reload.
+- ✅ **Step 2 — Stat allocation + management hub.** Growth is percentage-of-own-base per point,
+  hard-clamped per stat at `ALLOC.TARGET_PCT` = **HP 50% / ATK 45% / DEF 45% / SPD 30% / POT 20% /
+  RES 20%**, calibrated against the Common rarity's full **357-point career pool** so every rarity
+  reaches the same per-stat ceiling — a higher rarity's extra points/level buy *flexibility* (room to
+  also max a second stat), not a taller single-stat ceiling. SPD uses the spec's soft-cost guard
+  (points past +50% of base cost double) rather than a hard clamp. Management hub with live
+  before/after deltas and free respec.
+- ✅ **Step 3 — Equipment + substats.** 6 typed slots (Weapon/Armor/Emblem fixed mains;
+  Boots/Charm/Relic choosable). Gear values are %-of-base except SPD (flat add), per spec. Substat
+  pool includes `DualAttackChance`; gear rarity C/R/E/L drives substat count 1→4. The §5.2 budget
+  guard is enforced at stat-computation time — gear's contribution to any core stat capped at **40%
+  of allocated+base** (verified: a set rolling +84% raw ATK clamped correctly to +40%).
+  CritRate/CritDmg/DualAttackChance are gear-native and uncapped.
+- ⬜ **Steps 4–8 remain:** run/escrow structure, enemy scaling + drops, crafting MVP, profile viewer,
+  playtest pass.
+
+**Open read for the eventual playtest:** only the Legendary rarity's natural "max primary then max
+secondary" allocation lands both stats inside the spec's 40–60% balanced band; lower rarities land
+below it by construction (the 2.5× ceiling leaves no room). Worth checking whether that reads as
+intended specialist/generalist texture or as lower rarities feeling flat.
+
+> ⚠️ **Note for the playtest build:** `HANDOFF_playtest_build.md` and `playtest_build_spec.md` were
+> written against the *combat-only* prototype and describe extending it with summon / team-management /
+> main-menu / dungeon-select / run-manager screens. They do **not** account for Steps 1–3 already
+> existing. Reconcile before building — the persistence layer and management hub are already there.
 
 ## THE PLAN (locked this session — the efficiency-first roadmap)
 
