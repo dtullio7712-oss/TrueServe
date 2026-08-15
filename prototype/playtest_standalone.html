@@ -59,6 +59,19 @@ button.primary:hover:not(:disabled){filter:brightness(1.12);color:#100c08}
 .st.buff{background:#173026;color:#7fd6a3} .st.debuff{background:#331014;color:#f07683}
 .st.ctrl{background:#332614;color:#f0cd7a}
 label.ctl{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--ink3)}
+#tipbox{position:fixed;z-index:999;max-width:340px;background:#0a0806;border:1px solid var(--gold);
+  border-radius:9px;padding:11px 13px;font-size:12.5px;line-height:1.5;color:var(--ink);
+  box-shadow:0 10px 34px -10px #000;pointer-events:none}
+#tipbox .th{font-size:14px;color:#f2e8d8;margin-bottom:3px}
+#tipbox .tl{margin-top:6px}
+#tipbox .td{color:var(--ink2)}
+#tipbox .tm{font-family:'Courier New',monospace;font-size:10.5px;letter-spacing:.5px;color:var(--ink3)}
+#tipbox .tn{margin-top:7px;padding-top:6px;border-top:1px solid var(--line);
+  color:var(--ink3);font-style:italic;font-size:11.5px}
+#tipbox .tw{color:var(--accent);font-family:'Courier New',monospace;font-size:10px}
+[data-tip]{cursor:help}
+#abilitybar button[data-tip]{cursor:pointer}
+.card.unit[data-tip]{cursor:pointer}
 input[type=range]{accent-color:var(--accent)}
 table{border-collapse:collapse;width:100%;font-size:13px}
 td,th{padding:4px 8px;border-bottom:1px solid var(--line);text-align:left}
@@ -819,6 +832,126 @@ const $ = s => document.querySelector(s);
 const esc = s => String(s??'').replace(/[<>&]/g, c=>({'<':'&lt;','>':'&gt;','&':'&amp;'}[c]));
 const hpColor = f => f>0.5 ? 'var(--green)' : f>0.25 ? 'var(--amber)' : 'var(--red)';
 
+/* ============================================================================
+   TOOLTIPS
+   Descriptions are GENERATED from the data — ability fields plus each effect's
+   authored `desc` from effects.json, with the real magnitude substituted for the
+   glossary's placeholder X. Nothing is hand-written per unit, so a kit edit in
+   roster.json shows up in the tooltip with no code change.
+   ========================================================================= */
+const TIPS = {}; let TIP_N = 0;
+function tip(html){ const k = 't'+(++TIP_N); TIPS[k] = html; return ` data-tip="${k}"`; }
+
+const TARGET_TEXT = {
+  one_enemy:'Single enemy', all_enemies:'All enemies', self:'Self',
+  all_allies:'Whole team', one_ally:'One ally',
+};
+/* How to read `mag` per effect family (effects.json _rules.magnitude_schema). */
+const MAG_AS = {
+  percent_hp:['heal','heal_team','regen','shield','shield_unbreakable','revive','wasting','hp_cost'],
+  dot:DOTS,
+  momentum:['momentum_push','momentum_pull','momentum_steal','knockback_momentum'],
+  threshold:['execute'],
+};
+function magText(id, mag){
+  if(mag===undefined || mag===null || mag==='') return '';
+  if(MAG_AS.dot.includes(id))       return `${mag}% max HP per turn`;
+  if(MAG_AS.percent_hp.includes(id))return `${mag}% max HP`;
+  if(MAG_AS.momentum.includes(id))  return `${mag}% of the Momentum gauge`;
+  if(MAG_AS.threshold.includes(id)) return `below ${mag}% HP`;
+  return `${mag}%`;
+}
+function describeEffect(e){
+  const m = EFFECT_META[e.id];
+  if(!m) return `<div class="tl">• ${esc(e.id)}</div>`;
+  // substitute the real number into the glossary's own wording ("+X% ATK." -> "+22% ATK.")
+  let body = m.desc || '';
+  if(e.mag!==undefined && e.mag!==null) body = body.replace(/\bX\b/g, e.mag);
+  const bits = [];
+  if(e.dur && e.dur < 90) bits.push(`${e.dur} turn${e.dur>1?'s':''}`);
+  if(e.dur >= 90) bits.push('lasts the fight');
+  if(e.stacks === true) bits.push('stacks per cast');
+  if(e.chance !== undefined && e.chance < 1) bits.push(`${Math.round(e.chance*100)}% base chance`);
+  if(e.applies_to === 'ally_side') bits.push('applies to your side');
+  const notImpl = IMPLEMENTED.has(e.id) ? '' : ` <span class="tw">[not modelled in this build]</span>`;
+  return `<div class="tl"><b>${esc(m.name)}</b>${notImpl}<br><span class="td">${esc(body)}</span>` +
+         (bits.length?`<br><span class="tm">${esc(bits.join(' · '))}</span>`:'') + `</div>`;
+}
+const KIND_TEXT = (ab,i) => ab.kind==='ult' ? 'ULTIMATE' : (i===0 ? 'BASIC' : 'SKILL');
+function describeAbility(ab, i){
+  const L = [];
+  L.push(`<div class="th">${esc(ab.name)} <span class="tm">${KIND_TEXT(ab,i)}</span></div>`);
+  const line = [];
+  line.push(TARGET_TEXT[ab.target] || ab.target);
+  line.push(ab.cooldown ? `cooldown ${ab.cooldown}` : 'no cooldown');
+  L.push(`<div class="tm">${esc(line.join(' · '))}</div>`);
+  if(ab.mult > 0){
+    let d = `Deals damage at <b>×${ab.mult}</b> of ATK`;
+    if(ab.hits > 1) d += `, <b>${ab.hits} hits</b>`;
+    if(ab.ignore_def) d += `, ignoring <b>${Math.round(ab.ignore_def*100)}%</b> of DEF`;
+    L.push(`<div class="tl">${d}.</div>`);
+  } else {
+    L.push(`<div class="tl td">No direct damage.</div>`);
+  }
+  if(ab.bonus_vs){
+    const c = {target_hp_below_50:'the target is below 50% HP',
+               target_hp_above_50:'the target is above 50% HP',
+               target_debuffed:'the target is debuffed',
+               target_buffed:'the target is buffed'}[ab.bonus_vs.condition] || ab.bonus_vs.condition;
+    L.push(`<div class="tl"><b>+${Math.round((ab.bonus_vs.amount||0)*100)}% damage</b> when ${esc(c)}.</div>`);
+  }
+  (ab.effects||[]).forEach(e => L.push(describeEffect(e)));
+  (ab.triggers||[]).forEach(t => L.push(
+    `<div class="tl td">On <b>${esc((t.on||'').replace(/_/g,' '))}</b>: ${esc(EFFECT_META[t.effect]?.name||t.effect)}.</div>`));
+  if(ab.note) L.push(`<div class="tn">${esc(ab.note)}</div>`);
+  return L.join('');
+}
+function describeUnit(u){
+  const b = u.baseStats;
+  const L = [`<div class="th">${esc(u.name)} <span class="tm r-${u.rarity}">${u.rarity.toUpperCase()}</span></div>`,
+    `<div class="tm">${esc(u.title||'')}</div>`,
+    `<div class="tm">${esc((u.role||'').replace('_',' '))} · ${AFF_LABEL[u.affinity]}</div>`,
+    `<div class="tl tm">HP ${b.hp} · ATK ${b.atk} · DEF ${b.def} · SPD ${b.spd} · POT ${b.pot} · RES ${b.res}</div>`];
+  u.abilities.forEach((a,i)=>{
+    const eff = (a.effects||[]).map(e=>EFFECT_META[e.id]?.name || e.id).join(', ');
+    L.push(`<div class="tl"><b>${esc(a.name)}</b> <span class="tm">${KIND_TEXT(a,i)}` +
+      `${a.mult?` ×${a.mult}`:''}${a.cooldown?` cd${a.cooldown}`:''}</span>` +
+      (eff?`<br><span class="td">${esc(eff)}</span>`:'') + `</div>`);
+  });
+  if(u.signature) L.push(`<div class="tn"><b>Signature:</b> ${esc(u.signature)}</div>`);
+  if(u.passives?.length) L.push(`<div class="tn"><b>Passives:</b> ${esc(u.passives.map(p=>p.name).join(' · '))}` +
+    ` <span class="tw">[passives are not implemented in this build]</span></div>`);
+  return L.join('');
+}
+function statusTip(s){
+  const m = EFFECT_META[s.id]; if(!m) return `<div class="tl">${esc(s.id)}</div>`;
+  let body = (m.desc||'').replace(/\bX\b/g, s.mag ?? 'X');
+  return `<div class="th">${esc(m.name)}</div><div class="tl td">${esc(body)}</div>` +
+    `<div class="tm">${s.stacks>1?`${s.stacks} stacks · `:''}${s.dur<90?`${s.dur} turn${s.dur>1?'s':''} left`:'lasts the fight'}</div>`;
+}
+
+/* hover plumbing — delegated, so re-renders never leave stale listeners */
+function initTooltips(){
+  const el = document.createElement('div');
+  el.id = 'tipbox'; el.style.display = 'none';
+  document.body.appendChild(el);
+  const show = t => { el.innerHTML = TIPS[t]; el.style.display = 'block'; };
+  document.addEventListener('mouseover', ev => {
+    const host = ev.target.closest('[data-tip]');
+    if(!host){ el.style.display='none'; return; }
+    const t = host.getAttribute('data-tip');
+    if(TIPS[t]) show(t);
+  });
+  document.addEventListener('mousemove', ev => {
+    if(el.style.display==='none') return;
+    const pad = 16, w = el.offsetWidth, h = el.offsetHeight;
+    let x = ev.clientX + pad, y = ev.clientY + pad;
+    if(x + w > innerWidth - 8)  x = ev.clientX - w - pad;
+    if(y + h > innerHeight - 8) y = Math.max(8, ev.clientY - h - pad);
+    el.style.left = x+'px'; el.style.top = y+'px';
+  });
+}
+
 function verdictOf(ratio){
   if(ratio>1.15) return {label:'Faceroll',   c:'#5b6b7a', blurb:'Well below you. Fast clears, thin rewards.'};
   if(ratio>1.02) return {label:'Comfortable',c:'#3fa66a', blurb:'A clean run for a current team.'};
@@ -841,7 +974,8 @@ function buildBoard(){
 let BOARD = null;
 
 function unitCard(u, sel, onclick){
-  return `<div class="card unit ${sel?'sel':''}" ${onclick?`onclick="${onclick}"`:''}>
+  const full = S.roster.find(r=>r.id===(u.id||u.uidSrc)) || u;
+  return `<div class="card unit ${sel?'sel':''}" ${onclick?`onclick="${onclick}"`:''}${tip(describeUnit(full))}>
     <div class="row" style="justify-content:space-between">
       <span class="mono r-${u.rarity}" style="font-size:10px;letter-spacing:1px">${u.rarity.toUpperCase()}</span>
       <span class="chip bg-${u.affinity||u.aff}" style="width:8px;height:8px;padding:0;border-radius:50%"></span>
@@ -855,6 +989,7 @@ function unitCard(u, sel, onclick){
 
 function render(){
   const app = $('#app');
+  for(const k in TIPS) delete TIPS[k];   // regenerated fresh each paint
   if(S.screen==='summon')        app.innerHTML = viewSummon();
   else if(S.screen==='team')     app.innerHTML = viewTeam();
   else if(S.screen==='menu')     app.innerHTML = viewMenu();
@@ -946,7 +1081,8 @@ function statusPills(c){
   return c.statuses.map(s=>{
     const cat = EFFECT_META[s.id]?.category;
     const cls = cat==='buff'?'buff' : cat==='control'?'ctrl' : 'debuff';
-    return `<span class="st ${cls}">${s.id}${s.stacks>1?'×'+s.stacks:''}${s.dur<90?' '+s.dur:''}</span>`;
+    return `<span class="st ${cls}"${tip(statusTip(s))}>${EFFECT_META[s.id]?.name || s.id}` +
+           `${s.stacks>1?'×'+s.stacks:''}${s.dur<90?' '+s.dur:''}</span>`;
   }).join('');
 }
 function combatantBox(c, targetable, idx){
@@ -984,10 +1120,11 @@ function viewFight(){
         ${esc(aw.actor.name)} acts${targeting?' — pick a target':''}</div>
       <div class="row" id="abilitybar">${aw.actor.abilities.map((a,i)=>{
         const ok = aw.actor.canUse(i);
+        const blocked = !ok && a.cd===0 ? ' (blocked)' : '';
         return `<button ${ok?'':'disabled'} onclick="playerPick(${i})"
-          ${aw.ability===a?'class="primary"':''}>
+          ${aw.ability===a?'class="primary"':''}${tip(describeAbility(a,i))}>
           ${esc(a.name)} <span class="mono dim" style="font-size:10px">
-          ${a.mult?('×'+a.mult):''}${a.cd?` cd${a.cd}`:''}</span></button>`;
+          ${a.mult?('×'+a.mult):''}${a.cd?` cd${a.cd}`:''}${blocked}</span></button>`;
       }).join('')}
       ${targeting?`<button onclick="S.fight.awaiting.ability=null;render()">cancel</button>`:''}</div></div>`:''}
     <div class="log" id="log">${LOG.slice(-80).map(l=>`<div class="${l.cls||''}">${esc(l.msg)}</div>`).join('')}</div>
@@ -1039,9 +1176,11 @@ function ingest(roster, effects){
   S.roster = roster.units;
   S.effects = effects;
   EFFECT_META = {};
-  effects.effects.forEach(e => EFFECT_META[e.id] = {category:e.category, stacks:e.stacks, name:e.name});
+  effects.effects.forEach(e => EFFECT_META[e.id] =
+    {category:e.category, stacks:e.stacks, name:e.name, desc:e.desc});
   $('#boot').classList.add('hidden');
   $('#app').classList.remove('hidden');
+  initTooltips();
   S.screen='summon'; render();
 }
 async function boot(){
