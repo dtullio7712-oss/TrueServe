@@ -12,7 +12,7 @@
     "removal": {
       "buffs": "removed by STRIP (enemy) unless dispellable=false",
       "debuffs": "removed by CLEANSE (ally) unless cleansable=false",
-      "dots": "debuff subtype; cleanse removes unless flagged; Doom is uncleansable",
+      "dots": "debuff subtype; cleanse removes unless flagged. (Doom is REMOVED from the game -- see no_instant_death.)",
       "control": "cleansable unless flagged; Enrage family is uncleansable",
       "instant": "resolves once; nothing to remove"
     },
@@ -23,7 +23,7 @@
       "permanent",
       "instant"
     ],
-    "undispellable": "any effect may set dispellable=false (buffs) / cleansable=false (debuffs) \u2014 used for Gold permanence, Dark/Doom, and the Enrage family.",
+    "undispellable": "any effect may set dispellable=false (buffs) / cleansable=false (debuffs) \u2014 used for Gold permanence, Dark's uncleansable pressure, and the Enrage family.",
     "team_wide_rule": "'team-wide' is NOT a separate effect \u2014 it's a target/duration modifier the ABILITY sets. Standard effects (ATK Up, Regen, POT Up, etc.) can be applied single-target OR team-wide; team versions are balanced by shorter duration or by being gated to rarer units. Do not author 'team_x' as its own entry.",
     "control_ladder": "Action-denial ladder \u2014 each blocks exactly ONE action type: Disarm=no basics, Silence=no skills, Sealed=no ults. Stun=full lockout (all three) + still takes damage. Freeze=lose turn but immune to direct damage (DoTs tick), 1 turn then breaks. Sleep=lose turns + self-heal 20%/turn, breaks on damage.",
     "enrage_system": "Enrage (Berserk/Frenzy/Overload) is UNCLEANSABLE and TRIGGER-BOUND (hp_threshold/phase/turn_count/on_effect:<id>/manual) \u2014 almost never a cast skill. Enemy-focused; rarely a (double-edged) player buff. Pair with 'prevent_death_team' (Last Line) for the signature un-killable-but-deadly survival window.",

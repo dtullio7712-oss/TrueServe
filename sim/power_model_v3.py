@@ -7,9 +7,15 @@ Fixes (owner-driven):
  - Passives scored off the EFFECT they grant (same vocab as abilities), not regex on prose. (fixes Alcuin)
  - Stat magnitudes resolve at a BUILD STATE (level55+mid gear ~1.8x) [STUB until progression math exists].
 """
-import json, math
-roster=json.load(open('roster.json'))
-effects=json.load(open('effects.json'))
+import json, math, os
+
+def _data(name):
+    """Resolve a data file: repo layout (sim/ alongside data/) first, then cwd."""
+    here = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "data", name)
+    return here if os.path.exists(here) else name
+
+roster=json.load(open(_data('roster.json')))
+effects=json.load(open(_data('effects.json')))
 CAT={e['id']:e['category'] for e in effects['effects']}
 
 # ---- dials ----

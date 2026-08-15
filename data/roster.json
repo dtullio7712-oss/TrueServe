@@ -1,7 +1,7 @@
 {
   "_schema": {
-    "version": "0.3",
-    "note": "Roster v0.3. All ability effects remapped onto the canonical effects.json glossary; ad-hoc tags retired. Conditional damage/hit-shape/pen/triggers moved to ability fields (bonus_vs/hits/ignore_def/triggers). Special-tier effects concentrated on Legendaries. 3 designed passives per unit (stat + enhance/unlock kinds); potency scales by rarity. Gold/Dark Legendaries carry a slight-to-medium power premium (off-wheel sidegrades). Numbers are dials.",
+    "version": "0.6",
+    "note": "Roster v0.6. All ability effects map onto the canonical effects.json glossary; conditional damage/hit-shape/pen/triggers live on ability fields (bonus_vs/hits/ignore_def/triggers), not in effects[]. 3 designed passives per unit; potency scales by rarity. Gold/Dark Legendaries carry an off-wheel sidegrade premium. Applied since v0.3: Doom removed in favour of debuff_bomb (v0.4); cooldowns reworked with slot 1 = 0 CD on all 100 units (v0.4); AoE vs single-target damage reweighted (v0.4); effects carry real magnitudes as {id,mag,dur,chance,stacks} (v0.5); every slot-1 ability deals damage, utility retained as riders (v0.6). Numbers are dials.",
     "affinities": {
       "judgment": {
         "color": "red",

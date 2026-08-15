@@ -1,5 +1,25 @@
 # encounter_sim.py — Results & Findings (Phase 2 complete)
 
+> **⚠️ SUPERSEDED IN ONE PLACE — read before acting on this file.** The turn-cap recommendations
+> below (the "Open finding" section and item 1 of "Recommended next tuning pass") are **retired**.
+> The owner ruled against an artificial turn-cap loss; the enrage + HP-premium pairing replaced it,
+> and that is what `PROJECT_CONTROL.md` locks. Those passages predate the call and are kept as
+> history. Everything else here stands.
+>
+> **The harness now implements the fix.** `encounter_sim.py` originally hardcoded a flat `1.6` boss
+> premium with a 20%/CD3 enrage — the exact configuration this file's own sweep table shows FAILING.
+> It now carries the per-archetype premium (`BOSS_HP_PREMIUM`: sprint 3.5, others 1.6) and a 35%/CD2
+> stacking enrage. Re-verified at Lv100 over 60 seeds, broken out by boss archetype:
+>
+> | Boss archetype | Balanced team | 4-tank badcomp |
+> |---|---|---|
+> | bulwark / plague / purist / siege | 100% | 90–100% |
+> | **sprint (enrage)** | **100%** | **31%** |
+>
+> The model holds: the enrage boss breaks the mono-tank team, a real-DPS team clears it. Note the
+> sweep table further down reports **0%** for that cell where the current harness reads **31%** —
+> read the table as directional, not exact.
+
 The harness is built and runs full generated runs (3–9 fights → sub-boss) with **HP +
 cooldowns carrying across the chain**, grounded in the real `roster.json` statlines,
 K=1000 model, affinity wheel, and the enemy scaling curve from `enemy_profiles_scaling.md`.
@@ -128,6 +148,8 @@ losing one unit to the boss. That "you won, but it cost you" texture is exactly 
    so Menders heal the most-hurt ally (28% max HP) — now they're a real threat-extender.
 
 ## Open finding — "lone healer = DPS wall" is NOT automatic
+> **⚠️ Its turn-cap recommendation is RETIRED** (see the banner at the top). The enrage +
+> per-archetype HP premium is the adopted answer. The rest of the finding stands.
 
 Your `4 tanks can't out-damage a healer` example is the right *intuition*, but the sim shows it
 doesn't hold with a **lone** mender: 4 L40 tanks push ~1,100 raw atk/round, enough to grind
@@ -155,8 +177,11 @@ and the whole "bring enough damage" lesson — actually teach.
 These are fine for balance-shape validation; the real feel test is Phase 3 (prototype).
 
 ## Recommended next tuning pass
-1. Add **turn-cap loss** → re-run the badcomp demo; expect 4-tank clears to fall sharply. This
-   is the single highest-value change and directly validates the core design promise.
+1. ~~Add **turn-cap loss** → re-run the badcomp demo; expect 4-tank clears to fall sharply. This
+   is the single highest-value change and directly validates the core design promise.~~
+   **RETIRED — no artificial turn-cap (owner call).** What actually shipped: the per-archetype HP
+   premium + a real stacking enrage, which drops 4-tank clears against the Sprint boss to ~31%
+   while a balanced team stays at 100%. Same design promise, no timer.
 2. Sweep **enemy composition weights** to confirm difficulty per tier feels right with the cap on.
 3. Then Phase 3: wire one generated run into the combat prototype and play it for *feel*.
 

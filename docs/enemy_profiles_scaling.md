@@ -148,8 +148,11 @@ For a dungeon of level D with F fights (3–9):
 
 **Locked decisions (this pass):**
 1. **Enemy gear floor = 0 at L1.** Kept as-is — earliest dungeon is naked-team-beatable.
-2. **Sub-boss = stat premium ×1.6/×1.25 PLUS ≥2 significant abilities** (see §4). A stat
+2. **Sub-boss = per-archetype stat premium PLUS ≥2 significant abilities** (see §4). A stat
    stick is not a sub-boss; every one poses a real tactical question via its kit.
+   *(Corrected: this line previously read a flat "×1.6/×1.25", contradicting §4 above. The flat
+   premium is exactly what the sim overturned — enrage/Sprint bosses take **×3.0–3.5 HP**,
+   signature-threat bosses **×1.6**, both ×1.25 ATK/DEF. §4 is authoritative.)*
 3. **Variety over guarantee.** Normal fights are NOT forced to include a comp-puzzle;
    pure stat-check runs are allowed. The sub-boss carries the guaranteed tactical moment.
 4. **POT/RES held flat at player-median** for this encounter type. (Oppressive-debuff

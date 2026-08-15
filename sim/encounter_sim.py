@@ -26,7 +26,13 @@ from dataclasses import dataclass, field
 K = 1000
 MENDER_HEAL_PCT = 0.28   # enemy Mender: % of ally max HP restored per cast (tunable)
 PLAYER_HEAL_PCT = 0.30   # player healer: % of ally max HP restored per cast (tunable)
-ROSTER_PATHS = ["/mnt/project/roster.json", "roster.json", "/mnt/user-data/uploads/roster.json"]
+_HERE = os.path.dirname(os.path.abspath(__file__))
+ROSTER_PATHS = [
+    os.path.join(_HERE, "..", "data", "roster.json"),   # repo layout: sim/ alongside data/
+    "roster.json",                                      # cwd fallback
+    "/mnt/project/roster.json",                         # legacy session mounts
+    "/mnt/user-data/uploads/roster.json",
+]
 
 # ---------- power curves (mirror progression_slice_spec + enemy spec) ----------
 def lvl_mult(L):  return 1.0 + 0.5 * ((L - 1) / 99)          # 1.0 -> 1.5
@@ -114,16 +120,25 @@ def build_player(u, level):
 # =====================================================================
 # Build enemies
 # =====================================================================
+BOSS_ARCHETYPE = {"bruiser":"sprint","warden":"bulwark","mender":"purist",
+                  "hexer":"plague","zealot":"siege"}
+# Per-archetype HP premium (enemy_profiles_scaling.md §4, after the SIM_RESULTS.md sweep).
+# An enrage only threatens anything if the boss OUTLIVES the team's damage, so enrage/Sprint
+# bosses need the big pool; signature-threat bosses carry their danger in the mechanic instead.
+# The old flat 1.6 killed the Sprint boss in ~3 rounds, before its enrage could ramp at all.
+BOSS_HP_PREMIUM = {"sprint": 3.5, "bulwark": 1.6, "plague": 1.6, "purist": 1.6, "siege": 1.6}
+BOSS_AD_PREMIUM = 1.25
+
 def make_enemy(role, D, aff, boss=False, name=None):
     a = ENEMY_ANCHOR[role]; m = lvl_mult(D) * gear_mult(enemy_gear(D))
-    hp_mult, ad_mult = (1.6, 1.25) if boss else (1.0, 1.0)
+    arche = BOSS_ARCHETYPE[role] if boss else None
+    hp_mult, ad_mult = (BOSS_HP_PREMIUM[arche], BOSS_AD_PREMIUM) if boss else (1.0, 1.0)
     abils = [Ability("Strike", 1.0, 0, "one_enemy")]
     if boss:
         # >=2 significant abilities (locked). Pick by archetype.
-        arche = {"bruiser":"sprint","warden":"bulwark","mender":"purist",
-                 "hexer":"plague","zealot":"siege"}[role]
         if arche == "sprint":
-            abils += [Ability("Rising Fury", 1.2, 3, "self", [{"id":"atk_up","mag":20,"dur":3}]),
+            # ~35% atk_up on a <=2-turn cast, stacking -- the pairing SIM_RESULTS solved for.
+            abils += [Ability("Rising Fury", 1.2, 2, "self", [{"id":"atk_up","mag":35,"dur":3}]),
                       Ability("Cleave", 1.4, 2, "all_enemies")]
         elif arche == "bulwark":
             abils += [Ability("Molten Guard", 0.0, 4, "self", [{"id":"def_up","mag":40,"dur":3}], heal=True),

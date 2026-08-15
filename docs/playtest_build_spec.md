@@ -9,9 +9,37 @@
 
 ---
 
+## REPO PATHS (added during the repo sync — this spec was written before the files had a home)
+
+Every artifact this spec references, and where it actually lives:
+
+| Referenced as | Actual path |
+|---|---|
+| the combat engine / `prototypes/combat-slice/` | **`prototype/combat_prototype.html`** (one self-contained file) |
+| `roster.json` | **`data/roster.json`** |
+| `effects.json` | **`data/effects.json`** (94 effects; `data/effects.md` is the readable render) |
+| `encounter_sim.py` | **`sim/encounter_sim.py`** (runs from the repo root) |
+| `dungeon_select_mock.jsx` | **`prototype/dungeon_select_mock.jsx`** |
+| `enemy_profiles_scaling.md`, `HANDOFF_playtest_build.md` | **`docs/`** |
+
+**⚠️ Two corrections to this spec's assumptions, both found during the sync:**
+
+1. **The prototype is no longer combat-only.** It carries progression **Steps 1–3** — persistence
+   (`localStorage`), the stat-allocation math, a management hub, and equipment + substats (~1500
+   lines). This spec's §4c "Team Management screen" and its no-gear guardrail were written against
+   the 937-line combat-only build. **Reconcile before building** — some of what §4b–§4d asks for
+   partly exists, and §8's "no gear" non-goal now conflicts with a gear system that is already in
+   the file. See `PROJECT_CONTROL.md` → BUILD STATE.
+2. **"The sim wins" now points at a corrected sim.** `encounter_sim.py` originally hardcoded a flat
+   `1.6` sub-boss premium with a 20%/CD3 enrage — the configuration `SIM_RESULTS.md` shows failing.
+   It now carries the per-archetype premium (sprint 3.5, others 1.6) and a 35%/CD2 stacking enrage,
+   matching §4 below. The precedence rule is safe to follow again.
+
+---
+
 ## 0. Stack & structure
 - Plain **HTML5 + canvas/DOM + vanilla JS** (or the prototype's existing setup). No framework required; no build step. Throwaway.
-- Load `roster.json` and `effects.json` as data (fetch or inline).
+- Load `data/roster.json` and `data/effects.json` as data (fetch or inline).
 - Keep it **one playable page**. Screens are states, not routes:
   `SUMMON → TEAM_MGMT → MAIN_MENU → DUNGEON_SELECT → RUN → FIGHT → RUN → … → RESULT → MAIN_MENU`.
   From `MAIN_MENU` the two buttons are `TEAM_MGMT` and `DUNGEON_SELECT`.
@@ -20,7 +48,7 @@
 ---
 
 ## 1. Reuse: the combat engine
-The existing `prototypes/combat-slice/` engine resolves ONE fight (Momentum order, cooldown-gated
+The existing `prototype/combat_prototype.html` engine resolves ONE fight (Momentum order, cooldown-gated
 abilities, `mitigated = raw × K/(K+DEF)` with **K=1000**, affinity wheel = +15% CritRate & +15%
 POT on advantaged actions, debuff apply via `chance = skill_base × (1 + POT − RES)` clamped
 [0.05,1.00]). **Do not rewrite it.** Wrap it. It must expose/accept:

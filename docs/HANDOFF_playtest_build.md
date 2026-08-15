@@ -19,12 +19,12 @@ set, per the locked efficiency-first plan. Don't sink time into balance you'll r
 ---
 
 ## What already exists (inputs — reuse, don't rebuild)
-- **Combat engine:** the playtested Momentum prototype (`prototypes/combat-slice/`). Momentum turn order, cooldown-gated abilities, K=1000 damage, affinity wheel, debuffs. **This is the combat core — extend it, don't rewrite it.**
-- **Roster data:** `roster.json` — 100 units, real statlines, abilities (mult/cooldown/target/effects/bonus_vs), passives. The playtest uses a **hand-picked subset** (see below), not all 100.
-- **Effect glossary:** `effects.json` — canonical effect ids the engine already resolves.
-- **Enemy design:** `enemy_profiles_scaling.md` — 5 enemy roles + scaling curve + per-archetype sub-boss premium. **The build implements this.**
-- **Dungeon-select feel:** `dungeon_select_mock.jsx` — the 5-dungeon selection screen, already built as a React mock. **Port its interaction/feel into the prototype** (it's a reference, not production code).
-- **Balance reference:** `encounter_sim.py` — the run simulator. Not shipped in the playtest, but its **numbers/curves are the source of truth** for enemy scaling. The HTML build should mirror its formulas so the playtest matches what we simmed.
+- **Combat engine:** the playtested Momentum prototype (`prototype/combat_prototype.html`). Momentum turn order, cooldown-gated abilities, K=1000 damage, affinity wheel, debuffs. **This is the combat core — extend it, don't rewrite it.**
+- **Roster data:** `data/roster.json` — 100 units, real statlines, abilities (mult/cooldown/target/effects/bonus_vs), passives. The playtest uses a **hand-picked subset** (see below), not all 100.
+- **Effect glossary:** `data/effects.json` — canonical effect ids the engine already resolves.
+- **Enemy design:** `docs/enemy_profiles_scaling.md` — 5 enemy roles + scaling curve + per-archetype sub-boss premium. **The build implements this.**
+- **Dungeon-select feel:** `prototype/dungeon_select_mock.jsx` — the 5-dungeon selection screen, already built as a React mock. **Port its interaction/feel into the prototype** (it's a reference, not production code).
+- **Balance reference:** `sim/encounter_sim.py` — the run simulator. Not shipped in the playtest, but its **numbers/curves are the source of truth** for enemy scaling. The HTML build should mirror its formulas so the playtest matches what we simmed.
 
 ---
 
@@ -117,7 +117,7 @@ land on a main menu → click Dungeon → pick from 5 dungeons → play a 3–9 
 attrition → face an RNG'd sub-boss → win/lose the run → return to the main menu.** Then **play it
 and report on feel** — both the front-end (summon/teambuild dopamine) and the run loop.
 
-**The Claude Code build spec is: `playtest_build_spec.md`** (generated alongside this handoff).
+**The Claude Code build spec is: `docs/playtest_build_spec.md`** (generated alongside this handoff).
 Hand that to Claude Code to implement.
 
 ---

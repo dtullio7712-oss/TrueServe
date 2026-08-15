@@ -58,7 +58,7 @@ the LOCKED mechanics:
 | **Affinity wheel** | 5 affinities as a TYPE chart (see §Roster). Advantage = **+15% Crit Rate & +15% Potency** on that action (not a flat damage multiplier). |
 | **Dual/assist attacks** | Off-turn ally chip-in chance (lives as the `DualAttackChance` gear substat). |
 | **Potency vs. Resolve** | Debuff application is a contest: `chance = skill_base × (1 + POT − RES)`, clamped [0.05, 1.00]. |
-| **Effect economy** | A full canonical glossary of **96 buffs/debuffs/DoTs/controls/instants/specials** (`effects.json`). Team-building is about effect interplay, not just big numbers. |
+| **Effect economy** | A full canonical glossary of **94 buffs/debuffs/DoTs/controls/instants/specials** (`effects.json`). Team-building is about effect interplay, not just big numbers. |
 | **Cooldowns** | Ultimates gated by per-unit cooldown, not a resource meter. |
 | **6-stat model** | HP / ATK / DEF / SPD / POT / RES (+ derived CritRate/CritDmg). Same model for units & enemies. |
 | **Damage** | `mitigated = raw × K/(K+DEF)`, **K = 1000** (playtested). |
@@ -96,7 +96,7 @@ the LOCKED mechanics:
 ### Roster structure (LOCKED — see `roster.json` for the data)
 - **100 units:** Judgment/Red 25 · Life/Green 25 · Revelation/Blue 25 · Majesty/Gold 12 · Mystery/Dark 13.
 - **Wheel:** Red→Green→Blue→Red (triangle); **Gold↔Dark** mutual advantage; **Gold & Dark are off-wheel** (never penalized vs RGB, only interact with each other — must stay *sidegrades*, not upgrades).
-- **Color identities:** Red = aggression · Green = outlast/sustain · Blue = control/tempo/precision · Gold = command/permanence · Dark = sacrifice/risk. The wheel bleeds into kits (Red punishes healing, Blue answers aggression, Gold's permanence beats strip, Dark's Doom/Wasting beats Green's sustain).
+- **Color identities:** Red = aggression · Green = outlast/sustain · Blue = control/tempo/precision · Gold = command/permanence · Dark = sacrifice/risk. The wheel bleeds into kits (Red punishes healing, Blue answers aggression, Gold's permanence beats strip, Dark's Wasting/bomb pressure beats Green's sustain).
 - **3 rarities:** Common(3★)/Epic(4★)/Legendary(5★), multipliers 1.00/1.25/1.50, points/level 3/4/5. Distribution 29 Leg / 35 Epic / 36 Common (per-affinity Legendaries 7/7/7/4/4).
 - **Every unit has 3 passives**; rarity sets passive *potency*, not count. Unlock mechanic parked (all unlocked for now).
 
@@ -124,7 +124,7 @@ Vertical slices, playtest each before speccing the next:
 
 1. **Combat prototype.** ✅ Built & playtested (Momentum, 4 units, kits, one enemy team).
 2. **Progression/rewards layer.** 🔄 Mid-build — persistence done; allocation math (Step 2) paused awaiting a numbers sanity-check. (`progression_slice_spec.md`)
-3. **Roster + effect system as data.** ✅ 100 units + 96-effect glossary authored (`roster.json`, `effects.json`). **Next: rework all kits to leverage the glossary** (see `HANDOFF_roster_ability_audit.md`).
+3. **Roster + effect system as data.** ✅ 100 units + 94-effect glossary authored (`roster.json`, `effects.json`). The kit rework onto the glossary is **done** — carried through the v0.3 audit and the v0.4/v0.5/v0.6 passes (see `PROJECT_CONTROL.md`). *(The old pointer to `HANDOFF_roster_ability_audit.md` is retired; that handoff's work is complete and the file is not in this repo.)*
 4. **The bridge (one creature/summon → roster → battle).** ⬜ Vision.
 5. **Minimal overworld loop** (one town tile, one building, one recipe, one dungeon feeding combat). ⬜ Vision.
 6. **Summoning ritual + banners** (the collection loop). ⬜ Vision.

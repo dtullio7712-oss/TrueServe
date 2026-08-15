@@ -1,5 +1,21 @@
 # progression_slice_spec.md — v0.1 (DRAFT → needs playtest)
 
+> **⚠️ PARTIALLY SUPERSEDED — read this before implementing anything from this file.**
+> This is a v0.1 draft written before several decisions were locked. Its **formulas and structure
+> are still the deliverable**; three areas of its *scaffolding* are out of date. Where this file and
+> `PROJECT_CONTROL.md` disagree, **PROJECT_CONTROL wins.**
+>
+> | This file says | Actually locked |
+> |---|---|
+> | §2.1 — **7 affinities** (Patience, Charity, Diligence, Fortitude, Temperance, Hope, Justice) | **5 affinities**: Judgment/Red, Life/Green, Revelation/Blue, Majesty/Gold, Mystery/Dark. The virtue model is explicitly RETIRED (see `Game_Design_Doc.md` §4b) — virtues survive only as kit flavor |
+> | §3.2 — **4 rarities** C/R/E/L, mults 1.00/1.12/1.26/1.42, points 3/4/5/6 | **3 rarities**: Common(3★)/Epic(4★)/Legendary(5★), mults 1.00/1.25/1.50, points 3/4/5 |
+> | §10.1 — a run is **5 dungeons × 10 battles**, boss at #10 | Story/Grind runs are **3–9 randomized fights → 1 RNG'd sub-boss** (`enemy_profiles_scaling.md`). The 10-battle shape belongs to the older dungeon model |
+>
+> **Still authoritative here:** the 6-stat model (§3), percentage-of-own-base growth and the
+> allocation/milestone/SPD-soft-cap math (§4), equipment + substats (§5), the K=1000 damage math
+> (§6), Potency-vs-Resolve (§8), the crafting MVP (§9), and the attrition/escrow *principle* (§10.2).
+> Steps 1–3 of the build implement §4–§5 already — see `PROJECT_CONTROL.md` → BUILD STATE.
+
 > **Deliverable of this session:** the progression & rewards layer that wraps combat.
 > Turns "a fight" into "a run of fights that matter because loot + growth carry forward."
 > Build target: extend the existing throwaway browser prototype. Feel-first, math-proven.
